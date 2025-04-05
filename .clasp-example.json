@@ -13,6 +13,9 @@
   ],
   "filePushOrder": [
     "src/config.js",
+    "src/cache.js",
+    "src/gmail-utils.js",
+    "src/processors.js",
     "src/main.js"
   ],
   "skipSubdirectories": false

@@ -27,13 +27,12 @@ A Google Apps Script application that automatically labels your Gmail threads as
    ```
 
 5. In the Google Apps Script editor, run the following functions in order:
-   - `setupLabels()` - Creates the necessary Gmail labels
-   - `setupTrigger()` - Sets up a time-based trigger to run regularly
-   - `processExistingThreads()` (Optional) - Labels existing emails
+   - `setup()` - Creates necessary Gmail labels and sets up time-based trigger
+   - `processHistorical()` (Optional) - Labels existing emails
 
 ## Configuration
 
-Edit the `Config.js` file to customize:
+Edit the `config.js` file to customize:
 
 - Your email address
 - Label names
@@ -44,7 +43,8 @@ Edit the `Config.js` file to customize:
 ## Manual Functions
 
 - `manualRun()` - Run the labeler manually without waiting for the trigger
-- `resetTracking()` - Reset user properties tracking (if needed)
+- `resetCache()` - Reset thread cache and tracking information
+- `cleanupCache()` - Clean up old cached thread records to avoid hitting storage limits
 
 ## License
 
