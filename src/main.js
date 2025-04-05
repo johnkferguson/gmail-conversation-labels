@@ -120,5 +120,5 @@ function resetCache() {
  * Daily cleanup function called by trigger
  */
 function cleanupCache() {
-  CacheModule.cleanupCache();
+  CacheModule.ThreadCache.cleanup();
 }

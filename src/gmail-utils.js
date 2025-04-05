@@ -16,12 +16,13 @@ var GmailUtilsModule = (function() {
    */
   function getMessagesSelectively(thread, maxToRetrieve = 2, includeLatest = false) {
     const messageCount = thread.getMessageCount();
+    const allMessages = thread.getMessages();
     
     if (messageCount === 0) {
       return [];
     } else if (messageCount === 1 || maxToRetrieve === 1) {
       // Only get first message if that's all we need
-      return [thread.getMessages(0, 1)[0]];
+      return [allMessages[0]];
     } else if (includeLatest && messageCount > maxToRetrieve) {
       // For conversation detection in threads with multiple messages,
       // we need to ensure we get both early messages and the most recent one
@@ -29,18 +30,31 @@ var GmailUtilsModule = (function() {
       
       // Calculate how many early messages to get (leaving room for the latest)
       const earlyCount = maxToRetrieve - 1;
+      const result = [];
       
       // Get early messages
-      const earlyMessages = thread.getMessages(0, earlyCount);
+      for (let i = 0; i < earlyCount; i++) {
+        if (i < allMessages.length) {
+          result.push(allMessages[i]);
+        }
+      }
       
       // Get the last message
-      const latestMessage = thread.getMessages(messageCount - 1, 1);
+      if (messageCount > earlyCount) {
+        result.push(allMessages[messageCount - 1]);
+      }
       
-      // Combine them
-      return earlyMessages.concat(latestMessage);
+      return result;
     } else {
       // Standard case: just get the first N messages
-      return thread.getMessages(0, Math.min(messageCount, maxToRetrieve));
+      const count = Math.min(messageCount, maxToRetrieve);
+      const result = [];
+      
+      for (let i = 0; i < count; i++) {
+        result.push(allMessages[i]);
+      }
+      
+      return result;
     }
   }
 
@@ -71,11 +85,14 @@ var GmailUtilsModule = (function() {
       return false;
     }
     
+    // Get all messages in the thread
+    const messages = thread.getMessages();
+    
     // Check if first message is from user
     const firstIsFromUser = firstSender.indexOf(CONFIG.userEmail) !== -1;
     
-    // Get second message only
-    const secondMessage = thread.getMessages(1, 1)[0];
+    // Get second message
+    const secondMessage = messages[1];
     const secondSender = secondMessage.getFrom();
     const secondIsFromUser = secondSender.indexOf(CONFIG.userEmail) !== -1;
     
@@ -87,7 +104,7 @@ var GmailUtilsModule = (function() {
     // If first two messages are from the same person, check a third
     // (but only if there are at least 3 messages)
     if (messageCount >= 3) {
-      const thirdMessage = thread.getMessages(2, 1)[0];
+      const thirdMessage = messages[2];
       const thirdSender = thirdMessage.getFrom();
       const thirdIsFromUser = thirdSender.indexOf(CONFIG.userEmail) !== -1;
       
