@@ -16,7 +16,7 @@ A Google Apps Script application that automatically labels your Gmail threads as
 ## Setup Instructions
 
 1. Clone this repository
-2. Copy `src/Config.template.js` to `src/Config.js` and update with your settings
+2. Copy `src/config.template.js` to `src/config.js` and update with your settings
 3. Copy `.clasp-example.json` to `.clasp.json` and update with your Google Apps Script project ID
 4. Deploy to Google Apps Script using clasp:
 
