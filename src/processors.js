@@ -32,10 +32,9 @@ function processNewEmails() {
       conversation: getOrCreateLabel(CONFIG.labels.conversation),
     };
 
-    const threads = GmailApp.search(
-      buildOptimizedSearchQuery(),
-      0,
-      CONFIG.polling.maxThreadsPerRun
+    const threads = withRetry(
+      () => GmailApp.search(buildOptimizedSearchQuery(), 0, CONFIG.polling.maxThreadsPerRun),
+      { label: "GmailApp.search (polling)" }
     );
 
     if (threads.length === 0) {
@@ -113,10 +112,20 @@ function processNewEmails() {
       cacheBatch.mark(thread, appliedLabels);
     }
 
-    if (threadBatches.inbound.length > 0) labels.inbound.addToThreads(threadBatches.inbound);
-    if (threadBatches.outbound.length > 0) labels.outbound.addToThreads(threadBatches.outbound);
+    if (threadBatches.inbound.length > 0) {
+      withRetry(() => labels.inbound.addToThreads(threadBatches.inbound), {
+        label: "addToThreads(inbound)",
+      });
+    }
+    if (threadBatches.outbound.length > 0) {
+      withRetry(() => labels.outbound.addToThreads(threadBatches.outbound), {
+        label: "addToThreads(outbound)",
+      });
+    }
     if (threadBatches.conversation.length > 0) {
-      labels.conversation.addToThreads(threadBatches.conversation);
+      withRetry(() => labels.conversation.addToThreads(threadBatches.conversation), {
+        label: "addToThreads(conversation)",
+      });
     }
     cacheBatch.flush();
 
@@ -151,7 +160,10 @@ function processExistingThreads() {
     // Always paginate from offset 0: each batch labels the threads it processes,
     // so they drop out of this query on the next call.
     const searchQuery = `-label:${CONFIG.labels.inbound} -label:${CONFIG.labels.outbound} -label:${CONFIG.labels.conversation}`;
-    const threads = GmailApp.search(searchQuery, 0, CONFIG.polling.maxThreadsPerRun);
+    const threads = withRetry(
+      () => GmailApp.search(searchQuery, 0, CONFIG.polling.maxThreadsPerRun),
+      { label: "GmailApp.search (backfill)" }
+    );
 
     if (threads.length === 0) {
       Logger.log("No existing threads found to process");
@@ -201,10 +213,20 @@ function processExistingThreads() {
       }
     }
 
-    if (threadBatches.inbound.length > 0) labels.inbound.addToThreads(threadBatches.inbound);
-    if (threadBatches.outbound.length > 0) labels.outbound.addToThreads(threadBatches.outbound);
+    if (threadBatches.inbound.length > 0) {
+      withRetry(() => labels.inbound.addToThreads(threadBatches.inbound), {
+        label: "addToThreads(inbound, backfill)",
+      });
+    }
+    if (threadBatches.outbound.length > 0) {
+      withRetry(() => labels.outbound.addToThreads(threadBatches.outbound), {
+        label: "addToThreads(outbound, backfill)",
+      });
+    }
     if (threadBatches.conversation.length > 0) {
-      labels.conversation.addToThreads(threadBatches.conversation);
+      withRetry(() => labels.conversation.addToThreads(threadBatches.conversation), {
+        label: "addToThreads(conversation, backfill)",
+      });
     }
     cacheBatch.flush();
 
