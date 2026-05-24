@@ -19,8 +19,9 @@ function main() {
   processNewEmails();
 }
 
-/** One-time setup: create labels, register triggers. */
+/** One-time setup: validate config, create labels, register triggers. */
 function setup() {
+  validateConfig();
   setupLabels();
   setupTrigger();
   setupCleanupTrigger();
