@@ -64,9 +64,8 @@ var GmailUtilsModule = (function() {
    * @return {string} Optimized search query
    */
   function buildOptimizedSearchQuery() {
-    // Search within more recent timeframe (last 3 minutes instead of 5)
-    // Only exclude messages that already have our labels
-    return `newer_than:3m -label:${CONFIG.labels.inbound} -label:${CONFIG.labels.outbound} -label:${CONFIG.labels.conversation}`;
+    const windowMinutes = CONFIG.polling.searchWindowMinutes;
+    return `newer_than:${windowMinutes}m -label:${CONFIG.labels.inbound} -label:${CONFIG.labels.outbound} -label:${CONFIG.labels.conversation}`;
   }
 
   /**

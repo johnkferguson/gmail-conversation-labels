@@ -11,61 +11,43 @@ var CacheModule = (function() {
    */
   const ThreadCache = {
     /**
-     * Get the timestamp of the last message in a thread
-     * 
-     * @param {string} threadId - The ID of the thread to check
-     * @return {number} Timestamp of the last message, or 0 if thread not found
-     */
-    getThreadLastMessageDate: function(threadId) {
-      const thread = GmailApp.getThreadById(threadId);
-      return thread ? thread.getLastMessageDate().getTime() : 0;
-    },
-    
-    /**
      * Check if a thread has already been processed and has no new messages
-     * 
-     * @param {string} threadId - The ID of the thread to check
+     *
+     * @param {GmailThread} thread - The thread to check
      * @return {boolean} True if the thread has been processed and has no new messages
      */
-    isProcessed: function(threadId) {
+    isProcessed: function(thread) {
       const props = PropertiesService.getUserProperties();
-      const cachedData = props.getProperty(CONFIG.caching.threadCacheKeyPrefix + threadId);
-      
+      const cachedData = props.getProperty(CONFIG.caching.threadCacheKeyPrefix + thread.getId());
+
       if (!cachedData) return false;
-      
+
       try {
         const data = JSON.parse(cachedData);
-        const thread = GmailApp.getThreadById(threadId);
-        
-        // If the thread has new messages since we last processed it
-        if (thread && thread.getLastMessageDate().getTime() > data.lastMessageTimestamp) {
+        if (thread.getLastMessageDate().getTime() > data.lastMessageTimestamp) {
           return false;
         }
-        
         return true;
       } catch (e) {
         return false;
       }
     },
-    
+
     /**
      * Mark a thread as processed with its applied labels
      * Also stores the timestamp of the last message for change detection
-     * 
-     * @param {string} threadId - The ID of the thread to mark
+     *
+     * @param {GmailThread} thread - The thread to mark
      * @param {Array<string>} appliedLabels - Array of label names applied to thread
      */
-    markProcessed: function(threadId, appliedLabels) {
+    markProcessed: function(thread, appliedLabels) {
       const props = PropertiesService.getUserProperties();
-      const thread = GmailApp.getThreadById(threadId);
-      const lastMessageTimestamp = thread ? thread.getLastMessageDate().getTime() : new Date().getTime();
-      
       props.setProperty(
-        CONFIG.caching.threadCacheKeyPrefix + threadId, 
+        CONFIG.caching.threadCacheKeyPrefix + thread.getId(),
         JSON.stringify({
           labels: appliedLabels,
           timestamp: new Date().getTime(),
-          lastMessageTimestamp: lastMessageTimestamp
+          lastMessageTimestamp: thread.getLastMessageDate().getTime()
         })
       );
     },

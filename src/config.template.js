@@ -30,10 +30,9 @@ const APP_CONFIG = {
     // Maximum number of threads to process per run
     maxThreadsPerRun: 50,
 
-    // Search query to find new emails
-    // Checks emails from last 10 minutes to ensure we don't miss any
-    searchQuery:
-      "newer_than:10m -label:Inbound -label:Outbound -label:Conversation",
+    // How far back the search looks on each run, in minutes.
+    // Keep this >= intervalMinutes so a delayed/skipped run doesn't miss mail.
+    searchWindowMinutes: 10,
 
     // Timeout safety (milliseconds) to avoid hitting script runtime limit
     timeoutMs: 25000,

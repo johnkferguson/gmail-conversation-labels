@@ -54,10 +54,10 @@ var ProcessorsModule = (function() {
         }
         
         // Skip if already processed (cached)
-        if (CacheModule.ThreadCache.isProcessed(threadId)) {
+        if (CacheModule.ThreadCache.isProcessed(thread)) {
           continue;
         }
-        
+
         // Get minimal messages necessary
         const messageCount = thread.getMessageCount();
         
@@ -77,10 +77,10 @@ var ProcessorsModule = (function() {
           if (hasOutbound) appliedLabels.push(CONFIG.labels.outbound);
           if (hasConversation) appliedLabels.push(CONFIG.labels.conversation);
           
-          CacheModule.ThreadCache.markProcessed(threadId, appliedLabels);
+          CacheModule.ThreadCache.markProcessed(thread, appliedLabels);
           continue;
         }
-        
+
         const appliedLabels = [];
         
         // Start with just the first message
@@ -165,9 +165,9 @@ var ProcessorsModule = (function() {
         }
         
         // Cache the thread as processed
-        CacheModule.ThreadCache.markProcessed(threadId, appliedLabels);
+        CacheModule.ThreadCache.markProcessed(thread, appliedLabels);
       }
-      
+
       // Apply labels in batch operations (much more efficient)
       if (threadBatches.inbound.length > 0) {
         labels.inbound.addToThreads(threadBatches.inbound);
@@ -215,37 +215,20 @@ var ProcessorsModule = (function() {
         conversation: GmailUtilsModule.getOrCreateLabel(CONFIG.labels.conversation),
       };
       
-      // Search for emails that don't have our labels
+      // Search for emails that don't have our labels.
+      // Always paginate from offset 0: each batch labels the threads it processes,
+      // so they drop out of this query on the next call.
       const searchQuery = `-label:${CONFIG.labels.inbound} -label:${CONFIG.labels.outbound} -label:${CONFIG.labels.conversation}`;
-      
-      // Get count of threads to process
-      const totalToProcess = GmailApp.search(searchQuery).length;
-      
-      // Skip if nothing to process
-      if (totalToProcess === 0) {
+      const threads = GmailApp.search(searchQuery, 0, CONFIG.polling.maxThreadsPerRun);
+
+      if (threads.length === 0) {
         Logger.log("No existing threads found to process");
         return;
       }
-      
-      // Get the user properties to track progress
-      const props = PropertiesService.getUserProperties();
-      let processedTotal = parseInt(props.getProperty("existingThreadsProcessed") || "0");
-      
-      // Get next batch to process
-      const threads = GmailApp.search(
-        searchQuery,
-        processedTotal,
-        CONFIG.polling.maxThreadsPerRun
-      );
-      
-      if (threads.length === 0) {
-        Logger.log("All existing threads have been processed");
-        return;
-      }
-      
+
       // Process current batch
       const currentBatch = [];
-      
+
       // Thread batches for different labels
       const threadBatches = {
         inbound: [],
@@ -268,10 +251,10 @@ var ProcessorsModule = (function() {
           }
           
           // Skip if already processed (cached)
-          if (CacheModule.ThreadCache.isProcessed(threadId)) {
+          if (CacheModule.ThreadCache.isProcessed(thread)) {
             continue;
           }
-          
+
           currentBatch.push(thread);
           
           // Get messages in the thread
@@ -323,7 +306,7 @@ var ProcessorsModule = (function() {
           }
           
           // Cache the thread as processed
-          CacheModule.ThreadCache.markProcessed(threadId, appliedLabels);
+          CacheModule.ThreadCache.markProcessed(thread, appliedLabels);
         } catch (e) {
           // Skip any threads that cause errors
           Logger.log(`Error processing thread: ${e.toString()}`);
@@ -344,25 +327,15 @@ var ProcessorsModule = (function() {
         labels.conversation.addToThreads(threadBatches.conversation);
       }
       
-      // Update progress
-      processedTotal += currentBatch.length;
-      props.setProperty("existingThreadsProcessed", processedTotal.toString());
-      
       if (CONFIG.debug.enableLogging) {
-        Logger.log(
-          `Processed ${currentBatch.length} existing threads (total: ${processedTotal} of ${totalToProcess})`
-        );
+        Logger.log(`Processed ${currentBatch.length} existing threads`);
       }
-      
-      // Check if we're done
-      if (processedTotal >= totalToProcess) {
-        props.deleteProperty("existingThreadsProcessed");
+
+      if (threads.length < CONFIG.polling.maxThreadsPerRun) {
         Logger.log("Completed processing all existing threads");
       } else {
         Logger.log(
-          `There are still ${
-            totalToProcess - processedTotal
-          } threads to process. Run processExistingThreads() again to continue.`
+          "More existing threads remain. Run processExistingThreads() again to continue."
         );
       }
     } catch (error) {
