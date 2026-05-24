@@ -2,12 +2,13 @@
  * Gmail Smart Labeller — main processing routines.
  *
  * `processNewEmails()` runs on the polling trigger; `processExistingThreads()`
- * is run manually to backfill historical mail.
+ * is run manually to backfill historical mail. Both delegate the actual
+ * classification decision to `classifyThread()` and focus on Gmail I/O:
+ * search, batch labeling, and caching.
  */
 
 /**
  * Process new email threads and apply labels. Called by the polling trigger.
- * Batches Gmail label writes and the cache write to minimize API calls.
  */
 function processNewEmails() {
   const startTime = Date.now();
@@ -19,8 +20,11 @@ function processNewEmails() {
       conversation: getOrCreateLabel(CONFIG.labels.conversation),
     };
 
-    const searchQuery = buildOptimizedSearchQuery();
-    const threads = GmailApp.search(searchQuery, 0, CONFIG.polling.maxThreadsPerRun);
+    const threads = GmailApp.search(
+      buildOptimizedSearchQuery(),
+      0,
+      CONFIG.polling.maxThreadsPerRun
+    );
 
     if (threads.length === 0) {
       if (CONFIG.debug.enableLogging) {
@@ -45,68 +49,51 @@ function processNewEmails() {
       const messageCount = thread.getMessageCount();
       if (messageCount === 0) continue;
 
-      const existingLabels = thread.getLabels().map((label) => label.getName());
-      const hasInbound = existingLabels.includes(CONFIG.labels.inbound);
-      const hasOutbound = existingLabels.includes(CONFIG.labels.outbound);
-      const hasConversation = existingLabels.includes(CONFIG.labels.conversation);
+      const existingLabelNames = thread.getLabels().map((label) => label.getName());
+      const existingLabels = {
+        inbound: existingLabelNames.includes(CONFIG.labels.inbound),
+        outbound: existingLabelNames.includes(CONFIG.labels.outbound),
+        conversation: existingLabelNames.includes(CONFIG.labels.conversation),
+      };
 
       // Already fully labeled — record in cache and skip.
-      if ((hasInbound || hasOutbound) && hasConversation) {
+      if ((existingLabels.inbound || existingLabels.outbound) && existingLabels.conversation) {
         const applied = [];
-        if (hasInbound) applied.push(CONFIG.labels.inbound);
-        if (hasOutbound) applied.push(CONFIG.labels.outbound);
-        if (hasConversation) applied.push(CONFIG.labels.conversation);
+        if (existingLabels.inbound) applied.push(CONFIG.labels.inbound);
+        if (existingLabels.outbound) applied.push(CONFIG.labels.outbound);
+        applied.push(CONFIG.labels.conversation);
         ThreadCache.markProcessed(thread, applied);
         continue;
       }
 
-      const appliedLabels = [];
+      // Sample messages: first + (up to two more, including the latest) so the
+      // classifier sees both ends of the conversation.
+      const sampledMessages =
+        messageCount === 1
+          ? getMessagesSelectively(thread, 1)
+          : getMessagesSelectively(thread, 3, true);
+      const messageSamples = sampledMessages.map((m) => ({ from: m.getFrom() }));
 
-      // Inbound vs Outbound from the first message.
-      const firstMessage = getMessagesSelectively(thread, 1)[0];
-      const firstSender = firstMessage.getFrom();
-      if (!hasInbound && !hasOutbound) {
-        if (firstSender.indexOf(CONFIG.userEmail) !== -1) {
-          threadBatches.outbound.push(thread);
-          appliedLabels.push(CONFIG.labels.outbound);
-        } else {
-          threadBatches.inbound.push(thread);
-          appliedLabels.push(CONFIG.labels.inbound);
-        }
+      const { primary, isConversation } = classifyThread({
+        firstSender: sampledMessages[0].getFrom(),
+        messages: messageSamples,
+        userEmail: CONFIG.userEmail,
+        existingLabels,
+      });
+
+      const appliedLabels = [];
+      if (!existingLabels.inbound && !existingLabels.outbound) {
+        threadBatches[primary].push(thread);
+        appliedLabels.push(CONFIG.labels[primary]);
       } else {
-        if (hasInbound) appliedLabels.push(CONFIG.labels.inbound);
-        if (hasOutbound) appliedLabels.push(CONFIG.labels.outbound);
+        if (existingLabels.inbound) appliedLabels.push(CONFIG.labels.inbound);
+        if (existingLabels.outbound) appliedLabels.push(CONFIG.labels.outbound);
       }
 
-      // Conversation: both sides participated, or the latest message reverses
-      // the original direction.
-      if (!hasConversation && messageCount >= 2) {
-        const messages = getMessagesSelectively(thread, 3, true);
-
-        let youParticipated = false;
-        let someoneElseParticipated = false;
-        for (const message of messages) {
-          if (message.getFrom().indexOf(CONFIG.userEmail) !== -1) {
-            youParticipated = true;
-          } else {
-            someoneElseParticipated = true;
-          }
-          if (youParticipated && someoneElseParticipated) break;
-        }
-
-        const lastMessage = messages[messages.length - 1];
-        const lastIsFromUser = lastMessage.getFrom().indexOf(CONFIG.userEmail) !== -1;
-
-        const isConversationThread =
-          (youParticipated && someoneElseParticipated) ||
-          (hasInbound && messages.length >= 2 && lastIsFromUser) ||
-          (hasOutbound && messages.length >= 2 && !lastIsFromUser);
-
-        if (isConversationThread) {
-          threadBatches.conversation.push(thread);
-          appliedLabels.push(CONFIG.labels.conversation);
-        }
-      } else if (hasConversation) {
+      if (isConversation && !existingLabels.conversation) {
+        threadBatches.conversation.push(thread);
+        appliedLabels.push(CONFIG.labels.conversation);
+      } else if (existingLabels.conversation) {
         appliedLabels.push(CONFIG.labels.conversation);
       }
 
@@ -177,32 +164,20 @@ function processExistingThreads() {
         const messages = thread.getMessages();
         if (messages.length === 0) continue;
 
-        const appliedLabels = [];
+        const messageSamples = messages.map((m) => ({ from: m.getFrom() }));
 
-        const firstSender = messages[0].getFrom();
-        if (firstSender.indexOf(CONFIG.userEmail) !== -1) {
-          threadBatches.outbound.push(thread);
-          appliedLabels.push(CONFIG.labels.outbound);
-        } else {
-          threadBatches.inbound.push(thread);
-          appliedLabels.push(CONFIG.labels.inbound);
-        }
+        const { primary, isConversation } = classifyThread({
+          firstSender: messages[0].getFrom(),
+          messages: messageSamples,
+          userEmail: CONFIG.userEmail,
+        });
 
-        if (messages.length >= 2) {
-          let youParticipated = false;
-          let someoneElseParticipated = false;
-          for (const message of messages) {
-            if (message.getFrom().indexOf(CONFIG.userEmail) !== -1) {
-              youParticipated = true;
-            } else {
-              someoneElseParticipated = true;
-            }
-            if (youParticipated && someoneElseParticipated) break;
-          }
-          if (youParticipated && someoneElseParticipated) {
-            threadBatches.conversation.push(thread);
-            appliedLabels.push(CONFIG.labels.conversation);
-          }
+        const appliedLabels = [CONFIG.labels[primary]];
+        threadBatches[primary].push(thread);
+
+        if (isConversation) {
+          threadBatches.conversation.push(thread);
+          appliedLabels.push(CONFIG.labels.conversation);
         }
 
         ThreadCache.markProcessed(thread, appliedLabels);
