@@ -1,6 +1,7 @@
 {
   "name": "gmail-smart-labeller",
   "version": "0.1.0",
+  "type": "module",
   "description": "A Google Apps Script that auto-labels Gmail threads as Inbound, Outbound, or Conversation.",
   "private": true,
   "license": "MIT",
