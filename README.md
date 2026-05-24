@@ -1,5 +1,8 @@
 # Gmail Smart Labeller
 
+[![CI](https://github.com/johnkferguson/gmail-smart-labeller/actions/workflows/ci.yml/badge.svg)](https://github.com/johnkferguson/gmail-smart-labeller/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 A small Google Apps Script that auto-applies three labels to your Gmail threads:
 
 - **Inbound** — first message was sent _to_ you
