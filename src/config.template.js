@@ -2,9 +2,9 @@
  * Configuration Template for Gmail Smart Labeler
  *
  * SETUP INSTRUCTIONS:
- * 1. Copy this file to Config.js
+ * 1. Copy this file to config.js
  * 2. Replace the placeholder values with your actual configuration
- * 3. Do NOT commit your Config.js file to source control
+ * 3. Do NOT commit your config.js file to source control
  */
 
 // User-specific configuration
@@ -25,15 +25,15 @@ const APP_CONFIG = {
   // Polling configuration
   polling: {
     // How many minutes between checks (1 is minimum for Google Apps Script)
-    intervalMinutes: 1,
+    intervalMinutes: 5,
 
     // Maximum number of threads to process per run
     maxThreadsPerRun: 50,
 
     // Search query to find new emails
-    // Checks emails from last 5 minutes to ensure we don't miss any
+    // Checks emails from last 10 minutes to ensure we don't miss any
     searchQuery:
-      "newer_than:5m -label:Inbound -label:Outbound -label:Conversation",
+      "newer_than:10m -label:Inbound -label:Outbound -label:Conversation",
 
     // Timeout safety (milliseconds) to avoid hitting script runtime limit
     timeoutMs: 25000,
@@ -46,6 +46,18 @@ const APP_CONFIG = {
 
     // Enable email notifications on errors
     sendErrorEmails: true,
+  },
+
+  // Thread cache settings (stored in PropertiesService.getUserProperties)
+  caching: {
+    // Prefix for thread cache keys in user properties
+    threadCacheKeyPrefix: "thread_",
+
+    // Maximum cached threads before cleanup prunes expired entries
+    maxCachedThreads: 500,
+
+    // How long to retain a cached thread record
+    threadCacheRetentionDays: 30,
   },
 };
 
