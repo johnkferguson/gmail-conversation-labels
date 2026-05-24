@@ -1,6 +1,6 @@
-# Gmail Smart Labeller
+# Gmail Conversation Labels
 
-[![CI](https://github.com/johnkferguson/gmail-smart-labeller/actions/workflows/ci.yml/badge.svg)](https://github.com/johnkferguson/gmail-smart-labeller/actions/workflows/ci.yml)
+[![CI](https://github.com/johnkferguson/gmail-conversation-labels/actions/workflows/ci.yml/badge.svg)](https://github.com/johnkferguson/gmail-conversation-labels/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 A small Google Apps Script that auto-applies three labels to your Gmail threads:
@@ -79,7 +79,7 @@ Visit <https://script.google.com/home/usersettings> and toggle **Google Apps Scr
 ```bash
 npx @google/clasp login           # opens browser, authorizes clasp
 npx @google/clasp create \
-    --title "Gmail Smart Labeller" \
+    --title "Gmail Conversation Labels" \
     --type standalone \
     --rootDir src
 ```

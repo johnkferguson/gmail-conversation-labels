@@ -1,5 +1,5 @@
 /**
- * Gmail Smart Labeller — Gmail and trigger helpers.
+ * Gmail Conversation Labels — Gmail and trigger helpers.
  *
  * Thin wrappers around GmailApp and ScriptApp. Pure helpers (no
  * cross-cutting state) live in classifier.js instead.

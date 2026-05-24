@@ -1,5 +1,5 @@
 /**
- * Gmail Smart Labeller — Apps Script entry points.
+ * Gmail Conversation Labels — Apps Script entry points.
  *
  * Every function in this file is invoked by name — by the Apps Script editor's
  * "Run" dropdown or by time-driven triggers. They MUST stay as top-level
@@ -25,7 +25,7 @@ function setup() {
   setupLabels();
   setupTrigger();
   setupCleanupTrigger();
-  Logger.log("Gmail Smart Labeller successfully set up!");
+  Logger.log("Gmail Conversation Labels successfully set up!");
   Logger.log("To process historical emails, run processHistorical().");
 }
 

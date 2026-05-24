@@ -1,5 +1,5 @@
 /**
- * Gmail Smart Labeller — main processing routines.
+ * Gmail Conversation Labels — main processing routines.
  *
  * `processNewEmails()` runs on the polling trigger; `processExistingThreads()`
  * is run manually to backfill historical mail. Both delegate the actual
@@ -137,7 +137,7 @@ function processNewEmails() {
   } catch (error) {
     const errorMessage = `Error in processNewEmails: ${error.toString()}`;
     Logger.log(errorMessage);
-    sendErrorEmail("Gmail Smart Labeller Error", errorMessage);
+    sendErrorEmail("Gmail Conversation Labels Error", errorMessage);
   } finally {
     lock.releaseLock();
   }
@@ -242,6 +242,6 @@ function processExistingThreads() {
   } catch (error) {
     const errorMessage = `Error in processExistingThreads: ${error.toString()}`;
     Logger.log(errorMessage);
-    sendErrorEmail("Gmail Smart Labeller Error", errorMessage);
+    sendErrorEmail("Gmail Conversation Labels Error", errorMessage);
   }
 }

@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "gmail-smart-labeller",
+      "name": "gmail-conversation-labels",
       "devDependencies": {
         "@biomejs/biome": "^2.4.15",
         "@google/clasp": "^3.3.0",

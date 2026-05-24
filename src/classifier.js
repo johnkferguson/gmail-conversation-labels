@@ -1,5 +1,5 @@
 /**
- * Gmail Smart Labeller — pure classifier.
+ * Gmail Conversation Labels — pure classifier.
  *
  * Given a thread's first sender, a sample of its messages, and the user's
  * email, decides which of {inbound, outbound, conversation} apply.

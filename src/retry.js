@@ -1,5 +1,5 @@
 /**
- * Gmail Smart Labeller — exponential-backoff retry.
+ * Gmail Conversation Labels — exponential-backoff retry.
  *
  * Gmail API quotas and Apps Script "Service invoked too many times" errors
  * surface as exceptions from GmailApp.search / label.addToThreads / similar.

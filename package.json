@@ -1,14 +1,14 @@
 {
-  "name": "gmail-smart-labeller",
+  "name": "gmail-conversation-labels",
   "version": "0.1.0",
   "type": "module",
-  "description": "A Google Apps Script that auto-labels Gmail threads as Inbound, Outbound, or Conversation.",
+  "description": "Auto-label your Gmail threads as Inbound, Outbound, or Conversation. A small Google Apps Script.",
   "private": true,
   "license": "MIT",
   "author": "John K. Ferguson",
   "repository": {
     "type": "git",
-    "url": "https://github.com/johnkferguson/gmail-smart-labeller.git"
+    "url": "https://github.com/johnkferguson/gmail-conversation-labels.git"
   },
   "scripts": {
     "lint": "biome check src test",

@@ -1,5 +1,5 @@
 /**
- * Gmail Smart Labeller — error reporting.
+ * Gmail Conversation Labels — error reporting.
  *
  * `sendErrorEmail` is a throttled wrapper around MailApp.sendEmail. Apps
  * Script triggers retry on failure, so a single broken config or transient

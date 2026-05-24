@@ -1,5 +1,5 @@
 /**
- * Gmail Smart Labeller — shared constants.
+ * Gmail Conversation Labels — shared constants.
  *
  * Apps Script trigger handler names. These MUST match the actual top-level
  * function names in main.js exactly, because `ScriptApp.newTrigger()` and

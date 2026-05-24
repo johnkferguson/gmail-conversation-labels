@@ -1,5 +1,5 @@
 /**
- * Gmail Smart Labeller — thread cache.
+ * Gmail Conversation Labels — thread cache.
  *
  * Caches "this thread has been processed and its last message is older than X"
  * in PropertiesService so re-runs skip threads that haven't changed since the

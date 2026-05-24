@@ -1,5 +1,5 @@
 /**
- * Configuration Template for Gmail Smart Labeler
+ * Configuration Template for Gmail Conversation Labels
  *
  * SETUP INSTRUCTIONS:
  * 1. Copy this file to config.js

@@ -1,5 +1,5 @@
 /**
- * Gmail Smart Labeller — config validator.
+ * Gmail Conversation Labels — config validator.
  *
  * Called from setup() so misconfiguration is caught before any triggers are
  * registered. Each problem is collected so the user gets the full picture in
