@@ -1,153 +1,144 @@
 /**
- * Gmail Smart Labeler - Cache Module
- * 
- * Handles thread caching to avoid redundant processing and reduce API calls.
+ * Gmail Conversation Labels — thread cache.
+ *
+ * Caches "this thread has been processed and its last message is older than X"
+ * in PropertiesService so re-runs skip threads that haven't changed since the
+ * last pass.
  */
 
-// Cache module using IIFE pattern for Apps Script
-var CacheModule = (function() {
+const ThreadCache = {
   /**
-   * Caching utilities to avoid redundant processing
+   * @param {GoogleAppsScript.Gmail.GmailThread} thread
+   * @return {boolean} True if cached and no new messages have arrived since.
    */
-  const ThreadCache = {
-    /**
-     * Check if a thread has already been processed and has no new messages
-     *
-     * @param {GmailThread} thread - The thread to check
-     * @return {boolean} True if the thread has been processed and has no new messages
-     */
-    isProcessed: function(thread) {
-      const props = PropertiesService.getUserProperties();
-      const cachedData = props.getProperty(CONFIG.caching.threadCacheKeyPrefix + thread.getId());
+  isProcessed(thread) {
+    const props = PropertiesService.getUserProperties();
+    const cachedData = props.getProperty(CONFIG.caching.threadCacheKeyPrefix + thread.getId());
 
-      if (!cachedData) return false;
+    if (!cachedData) return false;
 
-      try {
-        const data = JSON.parse(cachedData);
-        if (thread.getLastMessageDate().getTime() > data.lastMessageTimestamp) {
-          return false;
-        }
-        return true;
-      } catch (e) {
-        return false;
-      }
-    },
+    try {
+      const data = JSON.parse(cachedData);
+      return thread.getLastMessageDate().getTime() <= data.lastMessageTimestamp;
+    } catch (_e) {
+      return false;
+    }
+  },
 
-    /**
-     * Mark a thread as processed with its applied labels
-     * Also stores the timestamp of the last message for change detection
-     *
-     * @param {GmailThread} thread - The thread to mark
-     * @param {Array<string>} appliedLabels - Array of label names applied to thread
-     */
-    markProcessed: function(thread, appliedLabels) {
-      const props = PropertiesService.getUserProperties();
-      props.setProperty(
-        CONFIG.caching.threadCacheKeyPrefix + thread.getId(),
-        JSON.stringify({
+  /**
+   * Mark a single thread as processed. For batches of threads (i.e. a polling
+   * run), prefer `newBatch()` + `flush()` — each setProperty is a separate
+   * PropertiesService call, while setProperties writes them all in one.
+   *
+   * @param {GoogleAppsScript.Gmail.GmailThread} thread
+   * @param {string[]} appliedLabels
+   */
+  markProcessed(thread, appliedLabels) {
+    const batch = ThreadCache.newBatch();
+    batch.mark(thread, appliedLabels);
+    batch.flush();
+  },
+
+  /**
+   * Open a batch buffer for marking many threads as processed in one
+   * PropertiesService write. Call `mark(thread, labels)` per thread, then
+   * `flush()` once at the end.
+   *
+   * @returns {{
+   *   mark: (thread: GoogleAppsScript.Gmail.GmailThread, appliedLabels: string[]) => void,
+   *   flush: () => void,
+   *   size: () => number
+   * }}
+   */
+  newBatch() {
+    /** @type {Record<string, string>} */
+    const buffer = {};
+    return {
+      mark(thread, appliedLabels) {
+        buffer[CONFIG.caching.threadCacheKeyPrefix + thread.getId()] = JSON.stringify({
           labels: appliedLabels,
-          timestamp: new Date().getTime(),
-          lastMessageTimestamp: thread.getLastMessageDate().getTime()
-        })
-      );
-    },
-    
-    /**
-     * Clean up old cached thread records to avoid hitting storage limits
-     * Should be run periodically (e.g., once a day or week)
-     */
-    cleanup: function() {
-      const props = PropertiesService.getUserProperties();
-      const allProps = props.getProperties();
-      
-      // Get all thread cache keys
-      const cacheKeys = Object.keys(allProps).filter(
-        key => key.startsWith(CONFIG.caching.threadCacheKeyPrefix)
-      );
-      
-      // Skip if under limit
-      if (cacheKeys.length <= CONFIG.caching.maxCachedThreads) {
-        return;
-      }
-      
-      // Get expiration timestamp (30 days ago)
-      const expirationTime = new Date().getTime() - 
-                            (CONFIG.caching.threadCacheRetentionDays * 24 * 60 * 60 * 1000);
-      
-      // Find and delete expired entries
-      const keysToDelete = [];
-      
-      for (const key of cacheKeys) {
-        try {
-          const data = JSON.parse(allProps[key]);
-          if (data.timestamp < expirationTime) {
-            keysToDelete.push(key);
-          }
-        } catch (e) {
-          // Invalid JSON, just delete it
+          timestamp: Date.now(),
+          lastMessageTimestamp: thread.getLastMessageDate().getTime(),
+        });
+      },
+      flush() {
+        if (Object.keys(buffer).length === 0) return;
+        PropertiesService.getUserProperties().setProperties(buffer);
+      },
+      size() {
+        return Object.keys(buffer).length;
+      },
+    };
+  },
+
+  /**
+   * Prune cache entries older than the retention window. Bounded by
+   * `maxCachedThreads` so we don't scan on every call.
+   */
+  cleanup() {
+    const props = PropertiesService.getUserProperties();
+    const allProps = props.getProperties();
+
+    const cacheKeys = Object.keys(allProps).filter((key) =>
+      key.startsWith(CONFIG.caching.threadCacheKeyPrefix)
+    );
+
+    if (cacheKeys.length <= CONFIG.caching.maxCachedThreads) {
+      return;
+    }
+
+    const expirationTime =
+      Date.now() - CONFIG.caching.threadCacheRetentionDays * 24 * 60 * 60 * 1000;
+
+    const keysToDelete = [];
+    for (const key of cacheKeys) {
+      try {
+        const data = JSON.parse(allProps[key]);
+        if (data.timestamp < expirationTime) {
           keysToDelete.push(key);
         }
-      }
-      
-      // Delete expired keys
-      if (keysToDelete.length > 0) {
-        props.deleteAllProperties(keysToDelete);
-        
-        if (CONFIG.debug.enableLogging) {
-          Logger.log(`Cleaned up ${keysToDelete.length} expired thread cache entries`);
-        }
+      } catch (_e) {
+        keysToDelete.push(key);
       }
     }
-  };
 
-  /**
-   * Daily cleanup function called by trigger
-   */
-  function cleanupCache() {
-    ThreadCache.cleanup();
-  }
-
-  /**
-   * Set up daily trigger to clean up thread cache
-   * This prevents hitting storage quotas
-   */
-  function setupCleanupTrigger() {
-    try {
-      // Delete any existing triggers for cleanup
-      const triggers = ScriptApp.getProjectTriggers();
-      for (let i = 0; i < triggers.length; i++) {
-        if (triggers[i].getHandlerFunction() === "cleanupCache") {
-          ScriptApp.deleteTrigger(triggers[i]);
-        }
+    if (keysToDelete.length > 0) {
+      for (const key of keysToDelete) {
+        props.deleteProperty(key);
       }
-      
-      // Create a new trigger to run daily
-      ScriptApp.newTrigger("cleanupCache")
-        .timeBased()
-        .everyDays(1)
-        .atHour(2) // 2 AM
-        .create();
-      
-      Logger.log("Cache cleanup trigger set up to run daily at 2 AM");
-    } catch (error) {
-      Logger.log(`Error setting up cleanup trigger: ${error.toString()}`);
+      if (CONFIG.debug.enableLogging) {
+        Logger.log(`Cleaned up ${keysToDelete.length} expired thread cache entries`);
+      }
     }
-  }
+  },
+};
 
-  /**
-   * Reset user properties tracking
-   * Only needed if you want to start fresh
-   */
-  function resetTracking() {
-    PropertiesService.getUserProperties().deleteAllProperties();
-    Logger.log("Tracking reset");
-  }
+/**
+ * Register a daily 2 AM trigger for cache cleanup. Idempotent — removes any
+ * existing trigger first.
+ */
+function setupCleanupTrigger() {
+  try {
+    const triggers = ScriptApp.getProjectTriggers();
+    for (const trigger of triggers) {
+      if (trigger.getHandlerFunction() === TRIGGER_HANDLER_CLEANUP) {
+        ScriptApp.deleteTrigger(trigger);
+      }
+    }
 
-  // Public API
-  return {
-    ThreadCache: ThreadCache,
-    cleanupCache: cleanupCache,
-    setupCleanupTrigger: setupCleanupTrigger,
-    resetTracking: resetTracking
-  };
-})();
+    ScriptApp.newTrigger(TRIGGER_HANDLER_CLEANUP).timeBased().everyDays(1).atHour(2).create();
+
+    Logger.log("Cache cleanup trigger set up to run daily at 2 AM");
+  } catch (error) {
+    Logger.log(`Error setting up cleanup trigger: ${error.toString()}`);
+  }
+}
+
+/**
+ * Wipe all user properties (cache + any tracking). Use sparingly — this will
+ * cause every thread to be reprocessed on the next run.
+ */
+function resetTracking() {
+  PropertiesService.getUserProperties().deleteAllProperties();
+  Logger.log("Tracking reset");
+}
