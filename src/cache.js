@@ -26,19 +26,49 @@ const ThreadCache = {
   },
 
   /**
+   * Mark a single thread as processed. For batches of threads (i.e. a polling
+   * run), prefer `newBatch()` + `flush()` — each setProperty is a separate
+   * PropertiesService call, while setProperties writes them all in one.
+   *
    * @param {GoogleAppsScript.Gmail.GmailThread} thread
    * @param {string[]} appliedLabels
    */
   markProcessed(thread, appliedLabels) {
-    const props = PropertiesService.getUserProperties();
-    props.setProperty(
-      CONFIG.caching.threadCacheKeyPrefix + thread.getId(),
-      JSON.stringify({
-        labels: appliedLabels,
-        timestamp: Date.now(),
-        lastMessageTimestamp: thread.getLastMessageDate().getTime(),
-      })
-    );
+    const batch = ThreadCache.newBatch();
+    batch.mark(thread, appliedLabels);
+    batch.flush();
+  },
+
+  /**
+   * Open a batch buffer for marking many threads as processed in one
+   * PropertiesService write. Call `mark(thread, labels)` per thread, then
+   * `flush()` once at the end.
+   *
+   * @returns {{
+   *   mark: (thread: GoogleAppsScript.Gmail.GmailThread, appliedLabels: string[]) => void,
+   *   flush: () => void,
+   *   size: () => number
+   * }}
+   */
+  newBatch() {
+    /** @type {Record<string, string>} */
+    const buffer = {};
+    return {
+      mark(thread, appliedLabels) {
+        buffer[CONFIG.caching.threadCacheKeyPrefix + thread.getId()] = JSON.stringify({
+          labels: appliedLabels,
+          timestamp: Date.now(),
+          lastMessageTimestamp: thread.getLastMessageDate().getTime(),
+        });
+      },
+      flush() {
+        if (Object.keys(buffer).length === 0) return;
+        PropertiesService.getUserProperties().setProperties(buffer);
+      },
+      size() {
+        return Object.keys(buffer).length;
+      },
+    };
   },
 
   /**

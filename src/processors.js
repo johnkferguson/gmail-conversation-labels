@@ -47,6 +47,7 @@ function processNewEmails() {
 
     /** @type {{ inbound: GoogleAppsScript.Gmail.GmailThread[], outbound: GoogleAppsScript.Gmail.GmailThread[], conversation: GoogleAppsScript.Gmail.GmailThread[] }} */
     const threadBatches = { inbound: [], outbound: [], conversation: [] };
+    const cacheBatch = ThreadCache.newBatch();
 
     for (const thread of threads) {
       if (Date.now() - startTime > CONFIG.polling.timeoutMs) {
@@ -74,7 +75,7 @@ function processNewEmails() {
         if (existingLabels.inbound) applied.push(CONFIG.labels.inbound);
         if (existingLabels.outbound) applied.push(CONFIG.labels.outbound);
         applied.push(CONFIG.labels.conversation);
-        ThreadCache.markProcessed(thread, applied);
+        cacheBatch.mark(thread, applied);
         continue;
       }
 
@@ -109,7 +110,7 @@ function processNewEmails() {
         appliedLabels.push(CONFIG.labels.conversation);
       }
 
-      ThreadCache.markProcessed(thread, appliedLabels);
+      cacheBatch.mark(thread, appliedLabels);
     }
 
     if (threadBatches.inbound.length > 0) labels.inbound.addToThreads(threadBatches.inbound);
@@ -117,6 +118,7 @@ function processNewEmails() {
     if (threadBatches.conversation.length > 0) {
       labels.conversation.addToThreads(threadBatches.conversation);
     }
+    cacheBatch.flush();
 
     if (CONFIG.debug.enableLogging) {
       Logger.log(
@@ -160,6 +162,7 @@ function processExistingThreads() {
     const currentBatch = [];
     /** @type {{ inbound: GoogleAppsScript.Gmail.GmailThread[], outbound: GoogleAppsScript.Gmail.GmailThread[], conversation: GoogleAppsScript.Gmail.GmailThread[] }} */
     const threadBatches = { inbound: [], outbound: [], conversation: [] };
+    const cacheBatch = ThreadCache.newBatch();
 
     for (const thread of threads) {
       try {
@@ -192,7 +195,7 @@ function processExistingThreads() {
           appliedLabels.push(CONFIG.labels.conversation);
         }
 
-        ThreadCache.markProcessed(thread, appliedLabels);
+        cacheBatch.mark(thread, appliedLabels);
       } catch (e) {
         Logger.log(`Error processing thread: ${e.toString()}`);
       }
@@ -203,6 +206,7 @@ function processExistingThreads() {
     if (threadBatches.conversation.length > 0) {
       labels.conversation.addToThreads(threadBatches.conversation);
     }
+    cacheBatch.flush();
 
     if (CONFIG.debug.enableLogging) {
       Logger.log(`Processed ${currentBatch.length} existing threads`);

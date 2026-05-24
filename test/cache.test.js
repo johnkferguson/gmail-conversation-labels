@@ -141,6 +141,64 @@ describe("ThreadCache.cleanup", () => {
   });
 });
 
+describe("ThreadCache.newBatch", () => {
+  let ctx;
+  let props;
+
+  beforeEach(() => {
+    ({ ctx, props } = loadCacheModule());
+  });
+
+  it("size() reflects queued marks", () => {
+    const batch = ctx.ThreadCache.newBatch();
+    expect(batch.size()).toBe(0);
+    batch.mark(makeThread({ id: "a" }), []);
+    batch.mark(makeThread({ id: "b" }), []);
+    expect(batch.size()).toBe(2);
+  });
+
+  it("flush() writes all queued marks in a single setProperties call", () => {
+    let setPropertiesCalls = 0;
+    const props = makePropertiesService();
+    const original = props.getUserProperties().setProperties;
+    props.getUserProperties().setProperties = (obj) => {
+      setPropertiesCalls++;
+      original.call(props.getUserProperties(), obj);
+    };
+    const ctx = loadScripts(
+      ["src/constants.js", "src/cache.js"],
+      {
+        PropertiesService: props,
+        Logger: makeLogger(),
+        ScriptApp: makeScriptApp(),
+        CONFIG: baseConfig(),
+      },
+      ["ThreadCache", "TRIGGER_HANDLER_CLEANUP"]
+    );
+    const batch = ctx.ThreadCache.newBatch();
+    batch.mark(makeThread({ id: "a", lastMessageDate: new Date("2026-01-01") }), ["Inbound"]);
+    batch.mark(makeThread({ id: "b", lastMessageDate: new Date("2026-01-02") }), ["Outbound"]);
+    batch.flush();
+    expect(setPropertiesCalls).toBe(1);
+    expect(props._store.size).toBe(2);
+  });
+
+  it("flush() is a no-op for an empty batch", () => {
+    const batch = ctx.ThreadCache.newBatch();
+    batch.flush();
+    expect(props._store.size).toBe(0);
+  });
+
+  it("queued threads become isProcessed after flush", () => {
+    const thread = makeThread({ id: "x", lastMessageDate: new Date("2026-01-01") });
+    const batch = ctx.ThreadCache.newBatch();
+    batch.mark(thread, ["Inbound"]);
+    expect(ctx.ThreadCache.isProcessed(thread)).toBe(false);
+    batch.flush();
+    expect(ctx.ThreadCache.isProcessed(thread)).toBe(true);
+  });
+});
+
 describe("setupCleanupTrigger / resetTracking", () => {
   it("setupCleanupTrigger removes prior cleanupCache triggers and registers a daily one", () => {
     const props = makePropertiesService();
