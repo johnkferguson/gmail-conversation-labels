@@ -1,11 +1,11 @@
 /**
  * Gmail Smart Labeler - Cache Module
- * 
+ *
  * Handles thread caching to avoid redundant processing and reduce API calls.
  */
 
 // Cache module using IIFE pattern for Apps Script
-var CacheModule = (function() {
+var CacheModule = (() => {
   /**
    * Caching utilities to avoid redundant processing
    */
@@ -16,7 +16,7 @@ var CacheModule = (function() {
      * @param {GmailThread} thread - The thread to check
      * @return {boolean} True if the thread has been processed and has no new messages
      */
-    isProcessed: function(thread) {
+    isProcessed: (thread) => {
       const props = PropertiesService.getUserProperties();
       const cachedData = props.getProperty(CONFIG.caching.threadCacheKeyPrefix + thread.getId());
 
@@ -40,43 +40,43 @@ var CacheModule = (function() {
      * @param {GmailThread} thread - The thread to mark
      * @param {Array<string>} appliedLabels - Array of label names applied to thread
      */
-    markProcessed: function(thread, appliedLabels) {
+    markProcessed: (thread, appliedLabels) => {
       const props = PropertiesService.getUserProperties();
       props.setProperty(
         CONFIG.caching.threadCacheKeyPrefix + thread.getId(),
         JSON.stringify({
           labels: appliedLabels,
           timestamp: new Date().getTime(),
-          lastMessageTimestamp: thread.getLastMessageDate().getTime()
+          lastMessageTimestamp: thread.getLastMessageDate().getTime(),
         })
       );
     },
-    
+
     /**
      * Clean up old cached thread records to avoid hitting storage limits
      * Should be run periodically (e.g., once a day or week)
      */
-    cleanup: function() {
+    cleanup: () => {
       const props = PropertiesService.getUserProperties();
       const allProps = props.getProperties();
-      
+
       // Get all thread cache keys
-      const cacheKeys = Object.keys(allProps).filter(
-        key => key.startsWith(CONFIG.caching.threadCacheKeyPrefix)
+      const cacheKeys = Object.keys(allProps).filter((key) =>
+        key.startsWith(CONFIG.caching.threadCacheKeyPrefix)
       );
-      
+
       // Skip if under limit
       if (cacheKeys.length <= CONFIG.caching.maxCachedThreads) {
         return;
       }
-      
+
       // Get expiration timestamp (30 days ago)
-      const expirationTime = new Date().getTime() - 
-                            (CONFIG.caching.threadCacheRetentionDays * 24 * 60 * 60 * 1000);
-      
+      const expirationTime =
+        new Date().getTime() - CONFIG.caching.threadCacheRetentionDays * 24 * 60 * 60 * 1000;
+
       // Find and delete expired entries
       const keysToDelete = [];
-      
+
       for (const key of cacheKeys) {
         try {
           const data = JSON.parse(allProps[key]);
@@ -88,16 +88,16 @@ var CacheModule = (function() {
           keysToDelete.push(key);
         }
       }
-      
+
       // Delete expired keys
       if (keysToDelete.length > 0) {
         props.deleteAllProperties(keysToDelete);
-        
+
         if (CONFIG.debug.enableLogging) {
           Logger.log(`Cleaned up ${keysToDelete.length} expired thread cache entries`);
         }
       }
-    }
+    },
   };
 
   /**
@@ -120,14 +120,14 @@ var CacheModule = (function() {
           ScriptApp.deleteTrigger(triggers[i]);
         }
       }
-      
+
       // Create a new trigger to run daily
       ScriptApp.newTrigger("cleanupCache")
         .timeBased()
         .everyDays(1)
         .atHour(2) // 2 AM
         .create();
-      
+
       Logger.log("Cache cleanup trigger set up to run daily at 2 AM");
     } catch (error) {
       Logger.log(`Error setting up cleanup trigger: ${error.toString()}`);
@@ -148,6 +148,6 @@ var CacheModule = (function() {
     ThreadCache: ThreadCache,
     cleanupCache: cleanupCache,
     setupCleanupTrigger: setupCleanupTrigger,
-    resetTracking: resetTracking
+    resetTracking: resetTracking,
   };
 })();

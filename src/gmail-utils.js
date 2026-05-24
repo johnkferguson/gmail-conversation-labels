@@ -1,14 +1,14 @@
 /**
  * Gmail Smart Labeler - Gmail Utilities Module
- * 
+ *
  * Helper functions for working with Gmail API and labels.
  */
 
 // Gmail utilities module using IIFE pattern for Apps Script
-var GmailUtilsModule = (function() {
+var GmailUtilsModule = (() => {
   /**
    * Get only necessary messages based on what we need to check
-   * 
+   *
    * @param {GmailThread} thread - The Gmail thread
    * @param {number} maxToRetrieve - Maximum number of messages to retrieve
    * @param {boolean} includeLatest - Whether to include the latest message in the thread
@@ -17,7 +17,7 @@ var GmailUtilsModule = (function() {
   function getMessagesSelectively(thread, maxToRetrieve = 2, includeLatest = false) {
     const messageCount = thread.getMessageCount();
     const allMessages = thread.getMessages();
-    
+
     if (messageCount === 0) {
       return [];
     } else if (messageCount === 1 || maxToRetrieve === 1) {
@@ -27,40 +27,40 @@ var GmailUtilsModule = (function() {
       // For conversation detection in threads with multiple messages,
       // we need to ensure we get both early messages and the most recent one
       // This handles the case where someone emails multiple times and then gets a reply
-      
+
       // Calculate how many early messages to get (leaving room for the latest)
       const earlyCount = maxToRetrieve - 1;
       const result = [];
-      
+
       // Get early messages
       for (let i = 0; i < earlyCount; i++) {
         if (i < allMessages.length) {
           result.push(allMessages[i]);
         }
       }
-      
+
       // Get the last message
       if (messageCount > earlyCount) {
         result.push(allMessages[messageCount - 1]);
       }
-      
+
       return result;
     } else {
       // Standard case: just get the first N messages
       const count = Math.min(messageCount, maxToRetrieve);
       const result = [];
-      
+
       for (let i = 0; i < count; i++) {
         result.push(allMessages[i]);
       }
-      
+
       return result;
     }
   }
 
   /**
    * Build more efficient search queries to reduce results
-   * 
+   *
    * @return {string} Optimized search query
    */
   function buildOptimizedSearchQuery() {
@@ -71,51 +71,51 @@ var GmailUtilsModule = (function() {
   /**
    * Efficiently check if a thread is a conversation
    * Only gets additional messages when absolutely needed
-   * 
+   *
    * @param {GmailThread} thread - The Gmail thread to check
    * @param {string} firstSender - The sender of the first message
    * @return {boolean} True if the thread is a conversation
    */
   function isConversation(thread, firstSender) {
     const messageCount = thread.getMessageCount();
-    
+
     // Not a conversation if there's only one message
     if (messageCount <= 1) {
       return false;
     }
-    
+
     // Get all messages in the thread
     const messages = thread.getMessages();
-    
+
     // Check if first message is from user
     const firstIsFromUser = firstSender.indexOf(CONFIG.userEmail) !== -1;
-    
+
     // Get second message
     const secondMessage = messages[1];
     const secondSender = secondMessage.getFrom();
     const secondIsFromUser = secondSender.indexOf(CONFIG.userEmail) !== -1;
-    
+
     // If senders are different, it's a conversation
     if (firstIsFromUser !== secondIsFromUser) {
       return true;
     }
-    
+
     // If first two messages are from the same person, check a third
     // (but only if there are at least 3 messages)
     if (messageCount >= 3) {
       const thirdMessage = messages[2];
       const thirdSender = thirdMessage.getFrom();
       const thirdIsFromUser = thirdSender.indexOf(CONFIG.userEmail) !== -1;
-      
+
       return thirdIsFromUser !== firstIsFromUser;
     }
-    
+
     return false;
   }
 
   /**
    * Helper function to get or create a Gmail label
-   * 
+   *
    * @param {string} labelName - The name of the label to get or create
    * @return {GmailLabel} The Gmail label object
    */
@@ -165,9 +165,7 @@ var GmailUtilsModule = (function() {
         .everyMinutes(CONFIG.polling.intervalMinutes)
         .create();
 
-      Logger.log(
-        `Trigger set up to run every ${CONFIG.polling.intervalMinutes} minute(s)`
-      );
+      Logger.log(`Trigger set up to run every ${CONFIG.polling.intervalMinutes} minute(s)`);
     } catch (error) {
       Logger.log(`Error setting up trigger: ${error.toString()}`);
     }
@@ -180,6 +178,6 @@ var GmailUtilsModule = (function() {
     isConversation: isConversation,
     getOrCreateLabel: getOrCreateLabel,
     setupLabels: setupLabels,
-    setupTrigger: setupTrigger
+    setupTrigger: setupTrigger,
   };
 })();

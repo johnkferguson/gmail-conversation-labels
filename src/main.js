@@ -22,7 +22,7 @@
  */
 
 // Main entry point module using IIFE pattern for Apps Script
-var MainModule = (function () {
+var MainModule = (() => {
   /**
    * Main entry point function - called by time-driven trigger
    * Processes new email threads and applies appropriate labels
@@ -41,9 +41,7 @@ var MainModule = (function () {
     CacheModule.setupCleanupTrigger();
 
     Logger.log("Gmail Smart Labeler successfully set up!");
-    Logger.log(
-      "To process historical emails, run the processHistorical() function."
-    );
+    Logger.log("To process historical emails, run the processHistorical() function.");
   }
 
   /**
