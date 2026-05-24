@@ -9,8 +9,20 @@
 
 /**
  * Process new email threads and apply labels. Called by the polling trigger.
+ *
+ * Wrapped in a user-scoped lock so two overlapping trigger runs can't
+ * double-process the same threads. If the lock can't be acquired
+ * immediately, this invocation no-ops — the in-flight run is handling things.
  */
 function processNewEmails() {
+  const lock = LockService.getUserLock();
+  if (!lock.tryLock(0)) {
+    if (CONFIG.debug.enableLogging) {
+      Logger.log("processNewEmails skipped — another run is already in progress");
+    }
+    return;
+  }
+
   const startTime = Date.now();
 
   try {
@@ -114,9 +126,9 @@ function processNewEmails() {
   } catch (error) {
     const errorMessage = `Error in processNewEmails: ${error.toString()}`;
     Logger.log(errorMessage);
-    if (CONFIG.debug.sendErrorEmails) {
-      MailApp.sendEmail(CONFIG.userEmail, "Gmail Smart Labeller Error", errorMessage);
-    }
+    sendErrorEmail("Gmail Smart Labeller Error", errorMessage);
+  } finally {
+    lock.releaseLock();
   }
 }
 
@@ -204,8 +216,6 @@ function processExistingThreads() {
   } catch (error) {
     const errorMessage = `Error in processExistingThreads: ${error.toString()}`;
     Logger.log(errorMessage);
-    if (CONFIG.debug.sendErrorEmails) {
-      MailApp.sendEmail(CONFIG.userEmail, "Gmail Smart Labeller Error", errorMessage);
-    }
+    sendErrorEmail("Gmail Smart Labeller Error", errorMessage);
   }
 }

@@ -43,8 +43,14 @@ const APP_CONFIG = {
     // Enable logging to Google Apps Script Logger
     enableLogging: true,
 
-    // Enable email notifications on errors
+    // Enable email notifications on errors. Strongly recommended to keep on —
+    // without it, failures are only visible in the Apps Script execution log.
     sendErrorEmails: true,
+
+    // Minimum hours between error emails. Apps Script retries failed triggers,
+    // so without throttling a single broken config can generate dozens of
+    // identical alerts per hour.
+    errorEmailThrottleHours: 1,
   },
 
   // Thread cache settings (stored in PropertiesService.getUserProperties)
