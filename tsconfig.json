@@ -8,9 +8,10 @@
     "noEmit": true,
     "strict": true,
     "noImplicitAny": false,
+    "useUnknownInCatchVariables": false,
     "skipLibCheck": true,
     "types": ["google-apps-script", "vitest/globals"]
   },
   "include": ["src/**/*.js", "test/**/*.js", "vitest.config.js"],
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules", "src/config.js"]
 }

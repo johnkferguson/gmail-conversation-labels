@@ -1,122 +1,50 @@
 /**
- * Gmail Smart Labeler
+ * Gmail Smart Labeller — Apps Script entry points.
  *
- * This script automatically labels email threads as:
- * - "Inbound" (emails sent to you)
- * - "Outbound" (emails sent by you)
- * - "Conversation" (back-and-forth email exchanges)
+ * Every function in this file is invoked by name — by the Apps Script editor's
+ * "Run" dropdown or by time-driven triggers. They MUST stay as top-level
+ * `function` declarations with stable names. Trigger handler names referenced
+ * by string elsewhere are defined in constants.js.
  *
- * SETUP INSTRUCTIONS:
- * 1. Edit configuration variables in the CONFIG section of config.js
- * 2. Run setup() to create necessary Gmail labels and triggers
- * 3. Optionally, run processHistorical() to label existing emails
- *
- * IMPORTANT NOTES:
- * - Time-driven triggers are subject to quota limits
- * - The script runs as the account that created the trigger
- * - Gmail API does not support true "push notifications" in Apps Script
- *   without complex setup involving Cloud Pub/Sub (see documentation)
+ * Setup flow for new users:
+ *   1. Copy config.template.js → config.js, fill in `userEmail`.
+ *   2. Run `setup()` once to create labels and register the polling trigger.
+ *   3. (Optional) Run `processHistorical()` to label existing mail.
  *
  * @author John K. Ferguson
- * @version 1.1
  */
 
-// Main entry point module using IIFE pattern for Apps Script
-var MainModule = (() => {
-  /**
-   * Main entry point function - called by time-driven trigger
-   * Processes new email threads and applies appropriate labels
-   */
-  function main() {
-    ProcessorsModule.processNewEmails();
-  }
-
-  /**
-   * Set up the application
-   * Creates necessary labels and sets up time-based trigger
-   */
-  function setup() {
-    GmailUtilsModule.setupLabels();
-    GmailUtilsModule.setupTrigger();
-    CacheModule.setupCleanupTrigger();
-
-    Logger.log("Gmail Smart Labeler successfully set up!");
-    Logger.log("To process historical emails, run the processHistorical() function.");
-  }
-
-  /**
-   * Manual run function for testing
-   * Processes new emails without waiting for the trigger
-   */
-  function manualRun() {
-    ProcessorsModule.processNewEmails();
-  }
-
-  /**
-   * Process historical emails
-   * Labels existing threads that haven't been processed yet
-   */
-  function processHistorical() {
-    ProcessorsModule.processExistingThreads();
-  }
-
-  /**
-   * Reset all caching data
-   * Only needed if you want to start fresh
-   */
-  function resetCache() {
-    CacheModule.resetTracking();
-    Logger.log("Cache has been reset. All threads will be reprocessed.");
-  }
-
-  // Only exposing the functions we want to be publicly available
-  return {
-    main: main,
-    setup: setup,
-    manualRun: manualRun,
-    processHistorical: processHistorical,
-    resetCache: resetCache,
-  };
-})();
-
-/**
- * Main entry point called by the trigger
- */
+/** Polling trigger handler — labels new mail. */
 function main() {
-  MainModule.main();
+  processNewEmails();
 }
 
-/**
- * Set up the application
- */
+/** One-time setup: create labels, register triggers. */
 function setup() {
-  MainModule.setup();
+  setupLabels();
+  setupTrigger();
+  setupCleanupTrigger();
+  Logger.log("Gmail Smart Labeller successfully set up!");
+  Logger.log("To process historical emails, run processHistorical().");
 }
 
-/**
- * Manually run the main email processing function
- */
+/** Manual run for testing without waiting for the trigger. */
 function manualRun() {
-  MainModule.manualRun();
+  processNewEmails();
 }
 
-/**
- * Process existing unlabeled threads in batches
- */
+/** Label existing unlabeled threads. Run repeatedly until done. */
 function processHistorical() {
-  MainModule.processHistorical();
+  processExistingThreads();
 }
 
-/**
- * Reset cache tracking
- */
+/** Wipe the thread cache. All threads will be reprocessed on the next run. */
 function resetCache() {
-  MainModule.resetCache();
+  resetTracking();
+  Logger.log("Cache has been reset. All threads will be reprocessed.");
 }
 
-/**
- * Daily cleanup function called by trigger
- */
+/** Daily cache cleanup trigger handler. */
 function cleanupCache() {
-  CacheModule.ThreadCache.cleanup();
+  ThreadCache.cleanup();
 }

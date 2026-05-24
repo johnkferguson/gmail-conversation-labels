@@ -1,183 +1,99 @@
 /**
- * Gmail Smart Labeler - Gmail Utilities Module
+ * Gmail Smart Labeller — Gmail and trigger helpers.
  *
- * Helper functions for working with Gmail API and labels.
+ * Thin wrappers around GmailApp and ScriptApp. Pure helpers (no
+ * cross-cutting state) live in classifier.js instead.
  */
 
-// Gmail utilities module using IIFE pattern for Apps Script
-var GmailUtilsModule = (() => {
-  /**
-   * Get only necessary messages based on what we need to check
-   *
-   * @param {GmailThread} thread - The Gmail thread
-   * @param {number} maxToRetrieve - Maximum number of messages to retrieve
-   * @param {boolean} includeLatest - Whether to include the latest message in the thread
-   * @return {Array<GmailMessage>} Messages from the thread
-   */
-  function getMessagesSelectively(thread, maxToRetrieve = 2, includeLatest = false) {
-    const messageCount = thread.getMessageCount();
-    const allMessages = thread.getMessages();
+/**
+ * Fetch up to `maxToRetrieve` messages from a thread, optionally including the
+ * latest message regardless of position. Used by the classifier when we want
+ * to check both the start and the tail of a long thread without loading every
+ * message.
+ *
+ * Note: GmailApp's `getMessages()` loads the full thread; the "selective" part
+ * is the array slicing. For genuinely selective fetches we'd need the Gmail
+ * Advanced Service with `format: 'METADATA'`.
+ *
+ * @param {GoogleAppsScript.Gmail.GmailThread} thread
+ * @param {number} maxToRetrieve
+ * @param {boolean} includeLatest
+ * @return {GoogleAppsScript.Gmail.GmailMessage[]}
+ */
+function getMessagesSelectively(thread, maxToRetrieve = 2, includeLatest = false) {
+  const messageCount = thread.getMessageCount();
+  const allMessages = thread.getMessages();
 
-    if (messageCount === 0) {
-      return [];
-    } else if (messageCount === 1 || maxToRetrieve === 1) {
-      // Only get first message if that's all we need
-      return [allMessages[0]];
-    } else if (includeLatest && messageCount > maxToRetrieve) {
-      // For conversation detection in threads with multiple messages,
-      // we need to ensure we get both early messages and the most recent one
-      // This handles the case where someone emails multiple times and then gets a reply
+  if (messageCount === 0) return [];
+  if (messageCount === 1 || maxToRetrieve === 1) return [allMessages[0]];
 
-      // Calculate how many early messages to get (leaving room for the latest)
-      const earlyCount = maxToRetrieve - 1;
-      const result = [];
+  if (includeLatest && messageCount > maxToRetrieve) {
+    const earlyCount = maxToRetrieve - 1;
+    const result = [];
+    for (let i = 0; i < earlyCount && i < allMessages.length; i++) {
+      result.push(allMessages[i]);
+    }
+    if (messageCount > earlyCount) {
+      result.push(allMessages[messageCount - 1]);
+    }
+    return result;
+  }
 
-      // Get early messages
-      for (let i = 0; i < earlyCount; i++) {
-        if (i < allMessages.length) {
-          result.push(allMessages[i]);
-        }
+  const count = Math.min(messageCount, maxToRetrieve);
+  return allMessages.slice(0, count);
+}
+
+/**
+ * Build the Gmail search query used by `processNewEmails`. The window is
+ * configured by `CONFIG.polling.searchWindowMinutes`; keep it >= the trigger
+ * interval so a delayed/skipped run doesn't miss mail.
+ *
+ * @return {string}
+ */
+function buildOptimizedSearchQuery() {
+  const windowMinutes = CONFIG.polling.searchWindowMinutes;
+  return `newer_than:${windowMinutes}m -label:${CONFIG.labels.inbound} -label:${CONFIG.labels.outbound} -label:${CONFIG.labels.conversation}`;
+}
+
+/**
+ * @param {string} labelName
+ * @return {GoogleAppsScript.Gmail.GmailLabel}
+ */
+function getOrCreateLabel(labelName) {
+  return GmailApp.getUserLabelByName(labelName) || GmailApp.createLabel(labelName);
+}
+
+function setupLabels() {
+  try {
+    getOrCreateLabel(CONFIG.labels.inbound);
+    getOrCreateLabel(CONFIG.labels.outbound);
+    getOrCreateLabel(CONFIG.labels.conversation);
+    Logger.log("Labels have been set up successfully");
+  } catch (error) {
+    Logger.log(`Error setting up labels: ${error.toString()}`);
+  }
+}
+
+/**
+ * Register the polling trigger for `main`. Idempotent — removes any existing
+ * trigger for the same handler first.
+ */
+function setupTrigger() {
+  try {
+    const triggers = ScriptApp.getProjectTriggers();
+    for (const trigger of triggers) {
+      if (trigger.getHandlerFunction() === TRIGGER_HANDLER_MAIN) {
+        ScriptApp.deleteTrigger(trigger);
       }
-
-      // Get the last message
-      if (messageCount > earlyCount) {
-        result.push(allMessages[messageCount - 1]);
-      }
-
-      return result;
-    } else {
-      // Standard case: just get the first N messages
-      const count = Math.min(messageCount, maxToRetrieve);
-      const result = [];
-
-      for (let i = 0; i < count; i++) {
-        result.push(allMessages[i]);
-      }
-
-      return result;
     }
+
+    ScriptApp.newTrigger(TRIGGER_HANDLER_MAIN)
+      .timeBased()
+      .everyMinutes(CONFIG.polling.intervalMinutes)
+      .create();
+
+    Logger.log(`Trigger set up to run every ${CONFIG.polling.intervalMinutes} minute(s)`);
+  } catch (error) {
+    Logger.log(`Error setting up trigger: ${error.toString()}`);
   }
-
-  /**
-   * Build more efficient search queries to reduce results
-   *
-   * @return {string} Optimized search query
-   */
-  function buildOptimizedSearchQuery() {
-    const windowMinutes = CONFIG.polling.searchWindowMinutes;
-    return `newer_than:${windowMinutes}m -label:${CONFIG.labels.inbound} -label:${CONFIG.labels.outbound} -label:${CONFIG.labels.conversation}`;
-  }
-
-  /**
-   * Efficiently check if a thread is a conversation
-   * Only gets additional messages when absolutely needed
-   *
-   * @param {GmailThread} thread - The Gmail thread to check
-   * @param {string} firstSender - The sender of the first message
-   * @return {boolean} True if the thread is a conversation
-   */
-  function isConversation(thread, firstSender) {
-    const messageCount = thread.getMessageCount();
-
-    // Not a conversation if there's only one message
-    if (messageCount <= 1) {
-      return false;
-    }
-
-    // Get all messages in the thread
-    const messages = thread.getMessages();
-
-    // Check if first message is from user
-    const firstIsFromUser = firstSender.indexOf(CONFIG.userEmail) !== -1;
-
-    // Get second message
-    const secondMessage = messages[1];
-    const secondSender = secondMessage.getFrom();
-    const secondIsFromUser = secondSender.indexOf(CONFIG.userEmail) !== -1;
-
-    // If senders are different, it's a conversation
-    if (firstIsFromUser !== secondIsFromUser) {
-      return true;
-    }
-
-    // If first two messages are from the same person, check a third
-    // (but only if there are at least 3 messages)
-    if (messageCount >= 3) {
-      const thirdMessage = messages[2];
-      const thirdSender = thirdMessage.getFrom();
-      const thirdIsFromUser = thirdSender.indexOf(CONFIG.userEmail) !== -1;
-
-      return thirdIsFromUser !== firstIsFromUser;
-    }
-
-    return false;
-  }
-
-  /**
-   * Helper function to get or create a Gmail label
-   *
-   * @param {string} labelName - The name of the label to get or create
-   * @return {GmailLabel} The Gmail label object
-   */
-  function getOrCreateLabel(labelName) {
-    let label = GmailApp.getUserLabelByName(labelName);
-
-    // Create the label if it doesn't exist
-    if (label === null) {
-      label = GmailApp.createLabel(labelName);
-    }
-
-    return label;
-  }
-
-  /**
-   * Set up required Gmail labels if they don't already exist
-   */
-  function setupLabels() {
-    try {
-      // Create all labels
-      const inboundLabel = getOrCreateLabel(CONFIG.labels.inbound);
-      const outboundLabel = getOrCreateLabel(CONFIG.labels.outbound);
-      const conversationLabel = getOrCreateLabel(CONFIG.labels.conversation);
-
-      Logger.log("Labels have been set up successfully");
-    } catch (error) {
-      Logger.log(`Error setting up labels: ${error.toString()}`);
-    }
-  }
-
-  /**
-   * Set up a time-based trigger to run the script regularly
-   */
-  function setupTrigger() {
-    try {
-      // Delete any existing triggers for this function
-      const triggers = ScriptApp.getProjectTriggers();
-      for (let i = 0; i < triggers.length; i++) {
-        if (triggers[i].getHandlerFunction() === "main") {
-          ScriptApp.deleteTrigger(triggers[i]);
-        }
-      }
-
-      // Create a new trigger with the configured interval
-      ScriptApp.newTrigger("main")
-        .timeBased()
-        .everyMinutes(CONFIG.polling.intervalMinutes)
-        .create();
-
-      Logger.log(`Trigger set up to run every ${CONFIG.polling.intervalMinutes} minute(s)`);
-    } catch (error) {
-      Logger.log(`Error setting up trigger: ${error.toString()}`);
-    }
-  }
-
-  // Public API
-  return {
-    getMessagesSelectively: getMessagesSelectively,
-    buildOptimizedSearchQuery: buildOptimizedSearchQuery,
-    isConversation: isConversation,
-    getOrCreateLabel: getOrCreateLabel,
-    setupLabels: setupLabels,
-    setupTrigger: setupTrigger,
-  };
-})();
+}

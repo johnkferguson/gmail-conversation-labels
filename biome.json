@@ -49,5 +49,17 @@
         "noAssignInExpressions": "warn"
       }
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["src/**/*.js"],
+      "linter": {
+        "rules": {
+          "correctness": {
+            "noUnusedVariables": "off"
+          }
+        }
+      }
+    }
+  ]
 }
