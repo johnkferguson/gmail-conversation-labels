@@ -22,9 +22,10 @@
  * @property {string} firstSender - "From" of the thread's first message.
  * @property {MessageSample[]} messages - Sampled messages in chronological
  *   order. For polling, pass {first, …, latest}; for backfill, pass all.
- * @property {string[]} userEmails - Every address that counts as "me"
- *   (substring match against the From header). For single-identity setups,
- *   pass a one-element array.
+ * @property {string[]} userEmails - Every address that counts as "me".
+ *   Matched exactly (case-insensitive) against the address parsed out of
+ *   each `From:` header by `extractEmailAddress()`. For single-identity
+ *   setups, pass a one-element array.
  * @property {ExistingLabels} [existingLabels] - Labels already on the thread.
  *
  * @typedef {object} Classification
@@ -38,7 +39,8 @@
  */
 function classifyThread(input) {
   const { firstSender, messages, userEmails, existingLabels = {} } = input;
-  const isFromUser = (sender) => userEmails.some((addr) => sender.indexOf(addr) !== -1);
+  const normalizedUserEmails = userEmails.map((addr) => addr.toLowerCase());
+  const isFromUser = (sender) => normalizedUserEmails.includes(extractEmailAddress(sender));
 
   /** @type {"inbound" | "outbound"} */
   let primary;

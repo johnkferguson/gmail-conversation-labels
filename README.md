@@ -115,7 +115,7 @@ That's it. New mail will start getting labeled within `intervalMinutes` of arriv
 
 | Field | Default | Description |
 |---|---|---|
-| `userEmails` | _placeholder_ | **Required.** List of every address you send mail from — primary Gmail, aliases, custom-domain "send mail as" identities, Workspace addresses, Google Group memberships. Each entry is substring-matched against `From:` headers. |
+| `userEmails` | _placeholder_ | **Required.** List of every address you send mail from — primary Gmail, aliases, custom-domain "send mail as" identities, Workspace addresses, Google Group memberships. Matched exactly (case-insensitive) against the address parsed out of each `From:` header. |
 | `userEmail` | _unset_ | Legacy single-address form. Still accepted for backward compatibility; prefer `userEmails`. If both are set, `userEmails` wins. |
 | `labels.{inbound,outbound,conversation}` | `Inbound`, `Outbound`, `Conversation` | Label names. Renaming after first run will create new labels alongside the old. |
 | `polling.intervalMinutes` | `5` | Minutes between trigger runs. Apps Script's minimum is 1. |
@@ -164,7 +164,6 @@ These show up in the function dropdown in the Apps Script editor:
 
 - **Polling, not push.** Apps Script doesn't support real push notifications for Gmail without a separate GCP project + Pub/Sub. Latency is bounded by `intervalMinutes`.
 - **Quotas.** Apps Script has [daily quotas](https://developers.google.com/apps-script/guides/services/quotas) for Gmail reads, label operations, and trigger total runtime. A normal inbox is well under them; very large historical backfills may need multiple runs.
-- **Substring email match.** `userEmail` is matched as a substring of the `From:` header. Aliases that contain your address work; addresses that _happen to contain_ your address as a substring will be misclassified. (Tested and documented in `test/classifier.test.js`.)
 - **Cache size.** PropertiesService caps at ~500 KB total and ~9 KB per value. The script holds one small JSON record per processed thread; the default `maxCachedThreads: 500` keeps you comfortably under the cap.
 
 ## Development
@@ -196,6 +195,7 @@ src/
   gmail-utils.js      — label/trigger/search helpers
   errors.js           — throttled error email
   user-emails.js      — normalize userEmails / userEmail config shapes
+  email-header.js     — parse address out of a raw From: header
   retry.js            — exponential-backoff wrapper for transient Gmail errors
   validate-config.js  — config schema check
 

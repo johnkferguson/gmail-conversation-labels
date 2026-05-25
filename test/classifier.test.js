@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { loadScripts } from "./loader.js";
 
-const { classifyThread } = loadScripts(["src/classifier.js"]);
+const { classifyThread } = loadScripts(["src/email-header.js", "src/classifier.js"]);
 
 const me = ["me@example.com"];
 const meHeader = '"Me" <me@example.com>';
@@ -135,16 +135,46 @@ describe("classifyThread — email matching", () => {
     expect(result.primary).toBe("outbound");
   });
 
-  it("uses substring matching — this is a known limitation worth documenting", () => {
-    // 'not-john@example.com' contains 'john@example.com' as a substring, so
-    // the current implementation treats it as the user. If we ever switch to
-    // strict address parsing, this assertion flips.
+  it("no longer false-matches on substring overlap", () => {
+    // Previously, `notjohn@example.com` matched `john@example.com` as a
+    // substring of the entire From header. With exact-address matching, the
+    // parsed address `notjohn@example.com` doesn't equal `john@example.com`
+    // and the thread classifies as inbound.
     const result = classifyThread({
-      firstSender: '"Spam" <not-john@example.com>',
-      messages: [{ from: '"Spam" <not-john@example.com>' }],
+      firstSender: '"Spam" <notjohn@example.com>',
+      messages: [{ from: '"Spam" <notjohn@example.com>' }],
+      userEmails: ["john@example.com"],
+    });
+    expect(result.primary).toBe("inbound");
+  });
+
+  it("matches case-insensitively (header uppercase, config lowercase)", () => {
+    const result = classifyThread({
+      firstSender: '"John K." <John@Example.COM>',
+      messages: [{ from: '"John K." <John@Example.COM>' }],
       userEmails: ["john@example.com"],
     });
     expect(result.primary).toBe("outbound");
+  });
+
+  it("matches case-insensitively (header lowercase, config mixed-case)", () => {
+    const result = classifyThread({
+      firstSender: "john@example.com",
+      messages: [{ from: "john@example.com" }],
+      userEmails: ["John@Example.com"],
+    });
+    expect(result.primary).toBe("outbound");
+  });
+
+  it("ignores the display name when matching — only the parsed address counts", () => {
+    // The display name contains the user's address as a substring, but the
+    // actual From address belongs to someone else. Must classify as inbound.
+    const result = classifyThread({
+      firstSender: '"Mentioning john@example.com in their name" <stranger@example.org>',
+      messages: [{ from: '"Mentioning john@example.com in their name" <stranger@example.org>' }],
+      userEmails: ["john@example.com"],
+    });
+    expect(result.primary).toBe("inbound");
   });
 });
 
