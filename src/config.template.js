@@ -14,13 +14,14 @@ const USER_CONFIG = {
   //
   // Include all of:
   //   - your primary Gmail address
-  //   - aliases (e.g. yourname+tag@gmail.com is matched as a substring)
   //   - custom-domain "send mail as" identities
   //   - Workspace addresses
   //   - Google Group addresses you reply from
+  //   - any plus-aliases you actually send from (e.g. you+work@gmail.com)
   //
-  // Substring matching is used, so "me@example.com" matches both
-  // "Me <me@example.com>" and "noreply+me@example.com" — be specific.
+  // Matched exactly (case-insensitive) against the address parsed out of each
+  // From: header. List each alias you actually use — partial / domain-wildcard
+  // matches don't work.
   userEmails: ["your.email@example.com"],
 
   // Legacy single-address form. Still accepted; prefer userEmails above.
