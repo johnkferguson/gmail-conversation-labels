@@ -17,6 +17,12 @@ const LAST_ERROR_EMAIL_KEY = "lastErrorEmailTimestamp";
 function sendErrorEmail(subject, body) {
   if (!CONFIG.debug.sendErrorEmails) return;
 
+  const recipients = getUserEmails();
+  if (recipients.length === 0) {
+    Logger.log(`Error email skipped — no user email configured: ${subject}`);
+    return;
+  }
+
   const throttleHours = CONFIG.debug.errorEmailThrottleHours ?? 1;
   const throttleMs = throttleHours * 60 * 60 * 1000;
   const props = PropertiesService.getUserProperties();
@@ -32,6 +38,6 @@ function sendErrorEmail(subject, body) {
     return;
   }
 
-  MailApp.sendEmail(CONFIG.userEmail, subject, body);
+  MailApp.sendEmail(recipients[0], subject, body);
   props.setProperty(LAST_ERROR_EMAIL_KEY, String(Date.now()));
 }

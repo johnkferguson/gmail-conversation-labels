@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { loadScripts } from "./loader.js";
 
 const validConfig = () => ({
-  userEmail: "me@example.com",
+  userEmails: ["me@example.com"],
   polling: {
     intervalMinutes: 5,
     searchWindowMinutes: 10,
@@ -26,29 +26,95 @@ function loadValidator(config) {
 }
 
 describe("validateConfig — passing", () => {
-  it("accepts a fully valid config", () => {
+  it("accepts a fully valid config (array shape)", () => {
     const ctx = loadValidator(validConfig());
     expect(() => ctx.validateConfig()).not.toThrow();
   });
+
+  it("accepts a config with multiple userEmails", () => {
+    const cfg = validConfig();
+    cfg.userEmails = ["me@gmail.com", "me@mydomain.com", "me@workspace.example"];
+    expect(() => loadValidator(cfg).validateConfig()).not.toThrow();
+  });
+
+  it("accepts the legacy userEmail string shape", () => {
+    /** @type {any} */
+    const cfg = validConfig();
+    delete cfg.userEmails;
+    cfg.userEmail = "legacy@example.com";
+    expect(() => loadValidator(cfg).validateConfig()).not.toThrow();
+  });
 });
 
-describe("validateConfig — userEmail", () => {
+describe("validateConfig — userEmails", () => {
+  it("rejects empty array", () => {
+    const cfg = validConfig();
+    cfg.userEmails = [];
+    expect(() => loadValidator(cfg).validateConfig()).toThrow(/userEmails is empty/);
+  });
+
+  it("rejects the placeholder value in the array", () => {
+    const cfg = validConfig();
+    cfg.userEmails = ["your.email@example.com"];
+    expect(() => loadValidator(cfg).validateConfig()).toThrow(/userEmails\[0\] is the placeholder/);
+  });
+
+  it("rejects entries without an @", () => {
+    const cfg = validConfig();
+    cfg.userEmails = ["me@example.com", "not-an-email"];
+    expect(() => loadValidator(cfg).validateConfig()).toThrow(
+      /userEmails\[1\] \("not-an-email"\) doesn't look like an email/
+    );
+  });
+
+  it("rejects non-string entries", () => {
+    const cfg = validConfig();
+    /** @type {any} */ (cfg).userEmails = ["me@example.com", 42];
+    expect(() => loadValidator(cfg).validateConfig()).toThrow(
+      /userEmails\[1\] must be a non-empty string/
+    );
+  });
+
+  it("rejects empty-string entries", () => {
+    const cfg = validConfig();
+    cfg.userEmails = ["me@example.com", ""];
+    expect(() => loadValidator(cfg).validateConfig()).toThrow(
+      /userEmails\[1\] must be a non-empty string/
+    );
+  });
+
+  it("rejects when neither userEmails nor userEmail is set", () => {
+    /** @type {any} */
+    const cfg = validConfig();
+    delete cfg.userEmails;
+    expect(() => loadValidator(cfg).validateConfig()).toThrow(/userEmails is not set/);
+  });
+});
+
+describe("validateConfig — legacy userEmail", () => {
+  /** Build a config with only the legacy field (no userEmails). */
+  function legacyConfig(value) {
+    /** @type {any} */
+    const cfg = validConfig();
+    delete cfg.userEmails;
+    cfg.userEmail = value;
+    return cfg;
+  }
+
   it("rejects the placeholder", () => {
-    const cfg = validConfig();
-    cfg.userEmail = "your.email@example.com";
-    expect(() => loadValidator(cfg).validateConfig()).toThrow(/userEmail is not set/);
+    expect(() => loadValidator(legacyConfig("your.email@example.com")).validateConfig()).toThrow(
+      /userEmail is the placeholder/
+    );
   });
 
-  it("rejects missing", () => {
-    const cfg = validConfig();
-    cfg.userEmail = "";
-    expect(() => loadValidator(cfg).validateConfig()).toThrow(/userEmail is not set/);
+  it("rejects empty-string legacy value (treated as unset)", () => {
+    expect(() => loadValidator(legacyConfig("")).validateConfig()).toThrow(/userEmails is not set/);
   });
 
-  it("rejects non-email strings", () => {
-    const cfg = validConfig();
-    cfg.userEmail = "not-an-email";
-    expect(() => loadValidator(cfg).validateConfig()).toThrow(/doesn't look like an email/);
+  it("rejects non-email legacy strings", () => {
+    expect(() => loadValidator(legacyConfig("not-an-email")).validateConfig()).toThrow(
+      /userEmail "not-an-email" doesn't look like an email/
+    );
   });
 });
 
@@ -130,7 +196,7 @@ describe("validateConfig — caching", () => {
 describe("validateConfig — aggregation", () => {
   it("reports all problems in one error message", () => {
     const cfg = validConfig();
-    cfg.userEmail = "";
+    cfg.userEmails = [];
     cfg.polling.intervalMinutes = 0;
     cfg.labels.inbound = "";
     try {
@@ -138,7 +204,7 @@ describe("validateConfig — aggregation", () => {
       expect.fail("expected throw");
     } catch (err) {
       const msg = String(err);
-      expect(msg).toMatch(/userEmail is not set/);
+      expect(msg).toMatch(/userEmails is empty/);
       expect(msg).toMatch(/intervalMinutes must be >= 1/);
       expect(msg).toMatch(/labels.inbound must be a non-empty/);
     }

@@ -115,7 +115,8 @@ That's it. New mail will start getting labeled within `intervalMinutes` of arriv
 
 | Field | Default | Description |
 |---|---|---|
-| `userEmail` | _placeholder_ | **Required.** Used as substring match against `From:` headers to decide inbound vs outbound. |
+| `userEmails` | _placeholder_ | **Required.** List of every address you send mail from — primary Gmail, aliases, custom-domain "send mail as" identities, Workspace addresses, Google Group memberships. Each entry is substring-matched against `From:` headers. |
+| `userEmail` | _unset_ | Legacy single-address form. Still accepted for backward compatibility; prefer `userEmails`. If both are set, `userEmails` wins. |
 | `labels.{inbound,outbound,conversation}` | `Inbound`, `Outbound`, `Conversation` | Label names. Renaming after first run will create new labels alongside the old. |
 | `polling.intervalMinutes` | `5` | Minutes between trigger runs. Apps Script's minimum is 1. |
 | `polling.searchWindowMinutes` | `10` | Look back this far on each run. **Must be >= `intervalMinutes`** so a delayed/skipped run doesn't miss mail. |
@@ -129,6 +130,22 @@ That's it. New mail will start getting labeled within `intervalMinutes` of arriv
 | `caching.threadCacheRetentionDays` | `30` | Cleanup drops entries older than this. |
 
 `setup()` calls `validateConfig()` first and refuses to register triggers if anything is missing or out of range — you'll get a single multi-line error listing every problem.
+
+### Multi-identity example
+
+If you reply to mail from a primary Gmail address plus a custom domain plus a Workspace alias, list them all:
+
+```js
+const USER_CONFIG = {
+  userEmails: [
+    "me@gmail.com",
+    "me@mydomain.com",
+    "me@workspace.example",
+  ],
+};
+```
+
+A thread you start from any of these will be labeled **Outbound**, and a reply from any of them to an existing **Inbound** thread will promote it to **Conversation**. Without this, mail sent from secondary identities is misclassified as inbound.
 
 ## Editor-runnable functions
 
@@ -178,6 +195,7 @@ src/
   cache.js            — per-thread "already processed" cache
   gmail-utils.js      — label/trigger/search helpers
   errors.js           — throttled error email
+  user-emails.js      — normalize userEmails / userEmail config shapes
   retry.js            — exponential-backoff wrapper for transient Gmail errors
   validate-config.js  — config schema check
 

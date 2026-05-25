@@ -14,31 +14,43 @@ function makeMailApp() {
   };
 }
 
-function loadErrors(configOverrides = {}) {
+/**
+ * @param {object} [opts]
+ * @param {Record<string, unknown>} [opts.debug]
+ * @param {string[]} [opts.userEmails]
+ * @param {string} [opts.userEmail] legacy single-address form
+ */
+function loadErrors(opts = {}) {
   const props = makePropertiesService();
   const logger = makeLogger();
   const mailApp = makeMailApp();
+  /** @type {Record<string, unknown>} */
+  const configBase = {
+    debug: {
+      sendErrorEmails: true,
+      errorEmailThrottleHours: 1,
+      ...(opts.debug ?? {}),
+    },
+  };
+  if (opts.userEmails !== undefined) configBase.userEmails = opts.userEmails;
+  if (opts.userEmail !== undefined) configBase.userEmail = opts.userEmail;
+  if (opts.userEmails === undefined && opts.userEmail === undefined) {
+    configBase.userEmails = ["me@example.com"];
+  }
   const ctx = loadScripts(
-    ["src/errors.js"],
+    ["src/user-emails.js", "src/errors.js"],
     {
       PropertiesService: props,
       Logger: logger,
       MailApp: mailApp,
-      CONFIG: {
-        userEmail: "me@example.com",
-        debug: {
-          sendErrorEmails: true,
-          errorEmailThrottleHours: 1,
-          ...configOverrides,
-        },
-      },
+      CONFIG: configBase,
     },
     ["LAST_ERROR_EMAIL_KEY"]
   );
   return { ctx, props, logger, mailApp };
 }
 
-describe("sendErrorEmail", () => {
+describe("sendErrorEmail — happy path with userEmails array", () => {
   let ctx;
   let props;
   let mailApp;
@@ -48,7 +60,7 @@ describe("sendErrorEmail", () => {
     ({ ctx, props, mailApp, logger } = loadErrors());
   });
 
-  it("sends an email when no prior send is recorded", () => {
+  it("sends an email to the first userEmails entry", () => {
     ctx.sendErrorEmail("Boom", "Stack trace…");
     expect(mailApp._sent).toEqual([
       { to: "me@example.com", subject: "Boom", body: "Stack trace…" },
@@ -56,8 +68,16 @@ describe("sendErrorEmail", () => {
     expect(props._store.get(ctx.LAST_ERROR_EMAIL_KEY)).toBeDefined();
   });
 
+  it("uses the FIRST address when multiple are configured", () => {
+    ({ ctx, mailApp } = loadErrors({
+      userEmails: ["primary@example.com", "alias@example.com"],
+    }));
+    ctx.sendErrorEmail("Boom", "");
+    expect(mailApp._sent[0].to).toBe("primary@example.com");
+  });
+
   it("is a no-op when sendErrorEmails is disabled", () => {
-    ({ ctx, props, mailApp } = loadErrors({ sendErrorEmails: false }));
+    ({ ctx, props, mailApp } = loadErrors({ debug: { sendErrorEmails: false } }));
     ctx.sendErrorEmail("Boom", "");
     expect(mailApp._sent).toEqual([]);
     expect(props._store.size).toBe(0);
@@ -69,23 +89,39 @@ describe("sendErrorEmail", () => {
     ctx.sendErrorEmail("Third", "");
     expect(mailApp._sent).toHaveLength(1);
     expect(mailApp._sent[0].subject).toBe("First");
-    // Throttled sends should log
     expect(logger._logs.some((m) => m.includes("throttled"))).toBe(true);
   });
 
   it("sends again after the throttle window elapses", () => {
-    const { ctx, props, mailApp } = loadErrors({ errorEmailThrottleHours: 1 });
-    // Seed a "last sent" 90 minutes ago
+    const { ctx, props, mailApp } = loadErrors();
     props._store.set("lastErrorEmailTimestamp", String(Date.now() - 90 * 60 * 1000));
     ctx.sendErrorEmail("LateOne", "");
     expect(mailApp._sent).toHaveLength(1);
   });
 
   it("uses errorEmailThrottleHours from CONFIG (default 1) when undefined", () => {
-    // With throttleHours undefined, should default to 1h. Seed 30 min ago → throttled.
-    const { ctx, props, mailApp } = loadErrors({ errorEmailThrottleHours: undefined });
+    const { ctx, props, mailApp } = loadErrors({
+      debug: { errorEmailThrottleHours: undefined },
+    });
     props._store.set("lastErrorEmailTimestamp", String(Date.now() - 30 * 60 * 1000));
     ctx.sendErrorEmail("StillTooSoon", "");
     expect(mailApp._sent).toEqual([]);
+  });
+});
+
+describe("sendErrorEmail — legacy userEmail string", () => {
+  it("resolves recipient via the back-compat path", () => {
+    const { ctx, mailApp } = loadErrors({ userEmail: "legacy@example.com" });
+    ctx.sendErrorEmail("Boom", "");
+    expect(mailApp._sent[0].to).toBe("legacy@example.com");
+  });
+});
+
+describe("sendErrorEmail — degenerate config", () => {
+  it("skips and logs when no userEmails or userEmail is configured", () => {
+    const { ctx, mailApp, logger } = loadErrors({ userEmails: [] });
+    ctx.sendErrorEmail("Boom", "");
+    expect(mailApp._sent).toEqual([]);
+    expect(logger._logs.some((m) => m.includes("no user email configured"))).toBe(true);
   });
 });
