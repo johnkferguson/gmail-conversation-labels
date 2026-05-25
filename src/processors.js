@@ -24,6 +24,7 @@ function processNewEmails() {
   }
 
   const startTime = Date.now();
+  const userEmails = getUserEmails();
 
   try {
     const labels = {
@@ -89,7 +90,7 @@ function processNewEmails() {
       const { primary, isConversation } = classifyThread({
         firstSender: sampledMessages[0].getFrom(),
         messages: messageSamples,
-        userEmail: CONFIG.userEmail,
+        userEmails,
         existingLabels,
       });
 
@@ -149,6 +150,7 @@ function processNewEmails() {
  */
 function processExistingThreads() {
   const startTime = Date.now();
+  const userEmails = getUserEmails();
 
   try {
     const labels = {
@@ -196,7 +198,7 @@ function processExistingThreads() {
         const { primary, isConversation } = classifyThread({
           firstSender: messages[0].getFrom(),
           messages: messageSamples,
-          userEmail: CONFIG.userEmail,
+          userEmails,
         });
 
         const appliedLabels = [CONFIG.labels[primary]];

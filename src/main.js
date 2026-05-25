@@ -7,7 +7,7 @@
  * by string elsewhere are defined in constants.js.
  *
  * Setup flow for new users:
- *   1. Copy config.template.js → config.js, fill in `userEmail`.
+ *   1. Copy config.template.js → config.js, fill in `userEmails`.
  *   2. Run `setup()` once to create labels and register the polling trigger.
  *   3. (Optional) Run `processHistorical()` to label existing mail.
  *

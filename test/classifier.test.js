@@ -3,7 +3,7 @@ import { loadScripts } from "./loader.js";
 
 const { classifyThread } = loadScripts(["src/classifier.js"]);
 
-const me = "me@example.com";
+const me = ["me@example.com"];
 const meHeader = '"Me" <me@example.com>';
 const friendHeader = '"Friend" <friend@example.com>';
 
@@ -12,7 +12,7 @@ describe("classifyThread — primary direction", () => {
     const result = classifyThread({
       firstSender: meHeader,
       messages: [{ from: meHeader }],
-      userEmail: me,
+      userEmails: me,
     });
     expect(result.primary).toBe("outbound");
   });
@@ -21,7 +21,7 @@ describe("classifyThread — primary direction", () => {
     const result = classifyThread({
       firstSender: friendHeader,
       messages: [{ from: friendHeader }],
-      userEmail: me,
+      userEmails: me,
     });
     expect(result.primary).toBe("inbound");
   });
@@ -30,7 +30,7 @@ describe("classifyThread — primary direction", () => {
     const result = classifyThread({
       firstSender: friendHeader,
       messages: [{ from: friendHeader }],
-      userEmail: me,
+      userEmails: me,
       existingLabels: { outbound: true },
     });
     expect(result.primary).toBe("outbound");
@@ -40,7 +40,7 @@ describe("classifyThread — primary direction", () => {
     const result = classifyThread({
       firstSender: meHeader,
       messages: [{ from: meHeader }],
-      userEmail: me,
+      userEmails: me,
       existingLabels: { inbound: true },
     });
     expect(result.primary).toBe("inbound");
@@ -52,7 +52,7 @@ describe("classifyThread — conversation detection", () => {
     const result = classifyThread({
       firstSender: friendHeader,
       messages: [{ from: friendHeader }],
-      userEmail: me,
+      userEmails: me,
     });
     expect(result.isConversation).toBe(false);
   });
@@ -61,7 +61,7 @@ describe("classifyThread — conversation detection", () => {
     const result = classifyThread({
       firstSender: friendHeader,
       messages: [{ from: friendHeader }, { from: meHeader }],
-      userEmail: me,
+      userEmails: me,
     });
     expect(result.isConversation).toBe(true);
   });
@@ -70,7 +70,7 @@ describe("classifyThread — conversation detection", () => {
     const result = classifyThread({
       firstSender: meHeader,
       messages: [{ from: meHeader }, { from: meHeader }],
-      userEmail: me,
+      userEmails: me,
     });
     expect(result.isConversation).toBe(false);
   });
@@ -79,7 +79,7 @@ describe("classifyThread — conversation detection", () => {
     const result = classifyThread({
       firstSender: friendHeader,
       messages: [{ from: friendHeader }, { from: friendHeader }],
-      userEmail: me,
+      userEmails: me,
     });
     expect(result.isConversation).toBe(false);
   });
@@ -88,7 +88,7 @@ describe("classifyThread — conversation detection", () => {
     const result = classifyThread({
       firstSender: friendHeader,
       messages: [{ from: friendHeader }, { from: friendHeader }, { from: meHeader }],
-      userEmail: me,
+      userEmails: me,
       existingLabels: { inbound: true },
     });
     expect(result.isConversation).toBe(true);
@@ -98,7 +98,7 @@ describe("classifyThread — conversation detection", () => {
     const result = classifyThread({
       firstSender: meHeader,
       messages: [{ from: meHeader }, { from: meHeader }, { from: friendHeader }],
-      userEmail: me,
+      userEmails: me,
       existingLabels: { outbound: true },
     });
     expect(result.isConversation).toBe(true);
@@ -108,19 +108,17 @@ describe("classifyThread — conversation detection", () => {
     const result = classifyThread({
       firstSender: meHeader,
       messages: [{ from: meHeader }],
-      userEmail: me,
+      userEmails: me,
       existingLabels: { conversation: true },
     });
     expect(result.isConversation).toBe(true);
   });
 
   it("inbound + sampled-only-self does NOT spuriously fire conversation", () => {
-    // existingLabels.inbound = true and last message is the friend's = no reversal,
-    // and only one party participated = not a conversation.
     const result = classifyThread({
       firstSender: friendHeader,
       messages: [{ from: friendHeader }, { from: friendHeader }],
-      userEmail: me,
+      userEmails: me,
       existingLabels: { inbound: true },
     });
     expect(result.isConversation).toBe(false);
@@ -132,7 +130,7 @@ describe("classifyThread — email matching", () => {
     const result = classifyThread({
       firstSender: '"John K." <john@example.com>',
       messages: [{ from: '"John K." <john@example.com>' }],
-      userEmail: "john@example.com",
+      userEmails: ["john@example.com"],
     });
     expect(result.primary).toBe("outbound");
   });
@@ -144,8 +142,73 @@ describe("classifyThread — email matching", () => {
     const result = classifyThread({
       firstSender: '"Spam" <not-john@example.com>',
       messages: [{ from: '"Spam" <not-john@example.com>' }],
-      userEmail: "john@example.com",
+      userEmails: ["john@example.com"],
     });
     expect(result.primary).toBe("outbound");
+  });
+});
+
+describe("classifyThread — multiple user identities", () => {
+  const identities = ["me@gmail.com", "me@mydomain.com", "me@workspace.example"];
+  const aliasHeader = '"Me Workspace" <me@workspace.example>';
+  const secondaryHeader = '"Me Domain" <me@mydomain.com>';
+  const externalHeader = '"Friend" <friend@example.com>';
+
+  it("classifies as outbound when first sender matches the first listed identity", () => {
+    const result = classifyThread({
+      firstSender: '"Me Gmail" <me@gmail.com>',
+      messages: [{ from: '"Me Gmail" <me@gmail.com>' }],
+      userEmails: identities,
+    });
+    expect(result.primary).toBe("outbound");
+  });
+
+  it("classifies as outbound when first sender matches a non-first identity", () => {
+    const result = classifyThread({
+      firstSender: secondaryHeader,
+      messages: [{ from: secondaryHeader }],
+      userEmails: identities,
+    });
+    expect(result.primary).toBe("outbound");
+  });
+
+  it("classifies as outbound when sender matches the last listed identity", () => {
+    const result = classifyThread({
+      firstSender: aliasHeader,
+      messages: [{ from: aliasHeader }],
+      userEmails: identities,
+    });
+    expect(result.primary).toBe("outbound");
+  });
+
+  it("classifies as inbound when sender matches none of the identities", () => {
+    const result = classifyThread({
+      firstSender: externalHeader,
+      messages: [{ from: externalHeader }],
+      userEmails: identities,
+    });
+    expect(result.primary).toBe("inbound");
+  });
+
+  it("detects conversation when user replies from a different identity than thread started with", () => {
+    // Friend opened a thread, user replied from their workspace alias —
+    // should still classify as a conversation.
+    const result = classifyThread({
+      firstSender: externalHeader,
+      messages: [{ from: externalHeader }, { from: aliasHeader }],
+      userEmails: identities,
+      existingLabels: { inbound: true },
+    });
+    expect(result.isConversation).toBe(true);
+  });
+
+  it("empty userEmails list → every message classifies as inbound (no self defined)", () => {
+    const result = classifyThread({
+      firstSender: '"Me" <me@gmail.com>',
+      messages: [{ from: '"Me" <me@gmail.com>' }],
+      userEmails: [],
+    });
+    expect(result.primary).toBe("inbound");
+    expect(result.isConversation).toBe(false);
   });
 });

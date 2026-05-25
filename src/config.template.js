@@ -9,8 +9,22 @@
 
 // User-specific configuration
 const USER_CONFIG = {
-  // Your email address (required for determining Inbound vs Outbound)
-  userEmail: "your.email@example.com",
+  // Every address you send mail from. Used to decide "is this from me?" when
+  // labeling Inbound vs Outbound and detecting Conversations.
+  //
+  // Include all of:
+  //   - your primary Gmail address
+  //   - aliases (e.g. yourname+tag@gmail.com is matched as a substring)
+  //   - custom-domain "send mail as" identities
+  //   - Workspace addresses
+  //   - Google Group addresses you reply from
+  //
+  // Substring matching is used, so "me@example.com" matches both
+  // "Me <me@example.com>" and "noreply+me@example.com" — be specific.
+  userEmails: ["your.email@example.com"],
+
+  // Legacy single-address form. Still accepted; prefer userEmails above.
+  // userEmail: "your.email@example.com",
 };
 
 // Application configuration
